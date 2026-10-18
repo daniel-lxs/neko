@@ -301,13 +301,16 @@ through the Clipboard API during the button gesture; deployed sites need HTTPS, 
 show its native Paste confirmation. No manual clipboard box is shown on phones. Pending clipboard
 operations are cancelled when control, session or permissions change, or the phone view unmounts.
 
-While an admin controls from a phone, the viewer fits the remote desktop to its available aspect
-ratio at a minimum width of 512 pixels (Chromium windows require at least 500). The server owns
-this temporary resolution, saves the prior dimensions/rate once, and restores them on release,
-control handoff, disconnect, deletion or loss of privileges. A dropped socket uses Neko's existing
-five-second reconnect grace. A deliberate permanent screen change cancels the temporary override.
-Other viewers see this shared desktop; non-admin phones cannot resize it. Keyboard opening and
-pinch zoom do not resize the remote. Moving out of phone layout while retaining control keeps the
-current resolution until control is released or the session disconnects.
+Phone viewers keep the shared desktop at its configured size (for example, 1280×720).
+The stream starts fitted. Pinch to zoom the image up to 6×; drag to pan it when zoomed.
+At the fitted size, a completed single-finger swipe scrolls the remote page. Pinch and
+pan stay local and never change the browser page zoom or send a remote drag. A completed tap
+maps through the rendered image bounds to a remote mouse click and shows a local ripple.
+Letterbox taps do not click the desktop. A pinch, cancelled gesture, long press or ownership
+change cancels its pending tap. The keyboard still uses the existing input overlay.
 
-Phone controls hide after three seconds without interaction. A tap on the hidden viewer reveals them and is consumed locally; the next tap can interact with the remote. The redundant remote-browser label is removed. Controls stay available while a gesture, keyboard, clipboard action or keyboard-focused button is in use. Desktop layout and temporary resolution restoration are unchanged.
+Phone controls hide after three seconds without interaction. The first tap while hidden
+reveals them and is consumed locally; the next tap can interact with the remote. Pinch/pan
+remain available while controls are hidden. Desktop layout and automatic sign-in are unchanged.
+The earlier temporary-resolution server endpoint remains compatible with older clients, but
+this phone viewer never calls it.
