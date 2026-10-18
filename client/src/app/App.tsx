@@ -6,6 +6,7 @@ import { useNeko } from '@/state/provider'
 import { useSlot } from '@/plugins'
 import { WebRTCTransport } from '@m1k1o/neko'
 import { cn } from '@/lib/utils'
+import { usePhoneLayout } from '@/lib/usePhoneLayout'
 import logo from '@/assets/images/logo.svg'
 import { Dialog } from '@/components/Dialog'
 import { Toaster } from '@/components/ui/sonner'
@@ -24,6 +25,7 @@ const videoOnly = cast || !!params.get('embed')
 export function App() {
   const { t } = useTranslation()
   const { client, app } = useNeko()
+  const { phone, viewport } = usePhoneLayout()
   const connected = useStore(client.store, (s) => s.connection.status === 'connected')
   const { side, about } = useStore(
     app,
@@ -49,32 +51,41 @@ export function App() {
     )
   }
 
-  const expanded = !videoOnly && side
+  const expanded = !phone && !videoOnly && side
   return (
     // every icon filled, as in the v2 client (phosphor defaults to the outline `regular` weight)
     <IconContext.Provider value={{ weight: 'fill' }}>
       <div
         id="neko"
-        className="tablet:relative tablet:max-h-none tablet:flex-col absolute inset-0 flex max-h-[100vh] max-w-[100vw]"
+        className={
+          phone
+            ? 'fixed inset-x-0 flex max-w-full'
+            : 'tablet:relative tablet:max-h-none tablet:flex-col absolute inset-0 flex max-h-[100vh] max-w-[100vw]'
+        }
+        style={phone ? { height: viewport.height, top: viewport.top } : undefined}
       >
         <main
-          className={cn(
-            'flex min-w-[360px] max-w-full grow flex-col overflow-auto',
-            expanded ? 'tablet:portrait:h-[40vh] tablet:landscape:h-screen' : 'tablet:h-screen',
-          )}
+          className={
+            phone
+              ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
+              : cn(
+                  'flex min-w-[360px] max-w-full grow flex-col overflow-auto',
+                  expanded ? 'tablet:portrait:h-[40vh] tablet:landscape:h-screen' : 'tablet:h-screen',
+                )
+          }
         >
-          {!videoOnly && (
+          {!phone && !videoOnly && (
             <div className="flex h-menu shrink-0 bg-background-tertiary" data-testid="header">
               <Header />
             </div>
           )}
           {/* .video-container: index.html sizes it before the app renders (iOS) */}
-          <div className="video-container flex max-w-full grow bg-black/40">
-            <Stage hideControls={cast} extraControls={videoOnly} />
+          <div className={phone ? 'relative min-h-0 flex-1' : 'video-container flex max-w-full grow bg-black/40'}>
+            <Stage phone={phone} hideControls={cast} extraControls={videoOnly} />
           </div>
-          {!videoOnly && <RoomBar />}
+          {!phone && !videoOnly && <RoomBar />}
         </main>
-        {!videoOnly && <MemberMenu items={memberMenu} />}
+        {!phone && !videoOnly && <MemberMenu items={memberMenu} />}
         {expanded && <Side />}
         {!connected && <Connect />}
         {!videoOnly && <Toaster />}

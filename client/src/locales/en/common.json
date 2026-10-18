@@ -30,6 +30,21 @@
       "button_cancel": "Cancel"
     }
   },
+  "phone": {
+    "take": "Take control",
+    "release": "Release control",
+    "unlock": "Unlock control",
+    "paste": "Paste",
+    "keyboard": "Keyboard",
+    "play": "Play",
+    "unmute": "Enable sound",
+    "clipboard_unavailable": "Paste needs HTTPS and a browser with clipboard access.",
+    "clipboard_denied": "Clipboard access was cancelled. Tap Paste to try again.",
+    "clipboard_empty": "Your clipboard has no text to paste.",
+    "control_lost": "Control changed. Nothing was pasted.",
+    "resize_failed": "The remote screen could not fit this phone.",
+    "play_failed": "Video could not start. Tap Play to try again."
+  },
   "controls": {
     "release": "Release Controls",
     "request": "Request Controls",

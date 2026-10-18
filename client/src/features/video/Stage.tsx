@@ -23,6 +23,7 @@ import { Emote } from '@/features/emotes/Emote'
 import { Resolution } from './Resolution'
 import { Clipboard } from './Clipboard'
 import { Player } from './Player'
+import { PhoneStage } from './PhoneStage'
 import { useFullscreen } from './useFullscreen'
 import { useClipboardSync, canReadClipboard } from './useClipboardSync'
 import { usePip } from './usePip'
@@ -31,7 +32,11 @@ import { usePip } from './usePip'
 const overlayClasses =
   'absolute inset-0 flex cursor-pointer items-center justify-center overflow-hidden rounded-none bg-black/20'
 
-export function Stage({ hideControls, extraControls }: { hideControls: boolean; extraControls: boolean }) {
+export function Stage({ phone = false, ...props }: { phone?: boolean; hideControls: boolean; extraControls: boolean }) {
+  return phone ? <PhoneStage hideControls={props.hideControls} /> : <DesktopStage {...props} />
+}
+
+function DesktopStage({ hideControls, extraControls }: { hideControls: boolean; extraControls: boolean }) {
   const { t } = useTranslation()
   const { client, overlay, app } = useNeko()
   const actions = useActions()
