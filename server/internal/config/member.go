@@ -39,6 +39,7 @@ var DefaultAdminProfile = types.MemberProfile{
 
 type Member struct {
 	Provider string
+	Proxy    ProxyLogin
 
 	// providers
 	File      file.Config
@@ -48,6 +49,9 @@ type Member struct {
 }
 
 func (Member) Init(cmd *cobra.Command) error {
+	if err := initProxyLogin(cmd); err != nil {
+		return err
+	}
 	cmd.PersistentFlags().String("member.provider", "multiuser", "selected member provider")
 	if err := viper.BindPFlag("member.provider", cmd.PersistentFlags().Lookup("member.provider")); err != nil {
 		return err
@@ -201,6 +205,7 @@ func (Member) InitV2(cmd *cobra.Command) error {
 
 func (s *Member) Set() {
 	s.Provider = viper.GetString("member.provider")
+	s.Proxy = proxyLoginConfig()
 
 	// file provider
 	s.File.Path = viper.GetString("member.file.path")

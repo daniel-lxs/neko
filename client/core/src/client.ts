@@ -190,7 +190,16 @@ export class NekoClient {
   async authenticate(token = this.state.connection.token) {
     if (!token && this.opts.autologin) token = localStorage.getItem('neko_session') ?? undefined
     if (token) this.setToken(token)
-    await this.api.req('GET', '/whoami')
+    try {
+      await this.api.req('GET', '/whoami')
+    } catch (err) {
+      // A proxy may authenticate a new browser, but must never revive a disabled session (403).
+      if (!this.opts.autologin || !(err instanceof ApiError) || err.status !== 401) throw err
+      const config = await this.api.req<{ enabled: boolean }>('GET', '/proxy/config').catch(() => null)
+      if (!config?.enabled) throw err
+      const res = await this.api.req<LoginResponse>('POST', '/proxy/login', {})
+      this.setToken(res.token ?? '')
+    }
     this.store.setState({ authenticated: true })
   }
 

@@ -16,12 +16,14 @@ import (
 )
 
 type ApiManagerCtx struct {
-	sessions types.SessionManager
-	members  types.MemberManager
-	desktop  types.DesktopManager
-	capture  types.CaptureManager
-	routers  map[string]func(types.Router)
-	oauth    *oauthHandler
+	sessions     types.SessionManager
+	members      types.MemberManager
+	desktop      types.DesktopManager
+	capture      types.CaptureManager
+	routers      map[string]func(types.Router)
+	oauth        *oauthHandler
+	proxyConfig  config.ProxyLogin
+	proxyProfile types.MemberProfile
 }
 
 func New(
@@ -37,12 +39,23 @@ func New(
 		pathPrefix = serverConfig.PathPrefix
 	}
 
+	proxyConfig := memberConfig.Proxy
+	if memberConfig.Provider != "multiuser" {
+		proxyConfig.Enabled = false
+	}
+	proxyProfile := memberConfig.Multiuser.UserProfile
+	if proxyConfig.Admin {
+		proxyProfile = memberConfig.Multiuser.AdminProfile
+	}
+
 	return &ApiManagerCtx{
-		sessions: sessions,
-		members:  members,
-		desktop:  desktop,
-		capture:  capture,
-		routers:  make(map[string]func(types.Router)),
+		proxyConfig:  proxyConfig,
+		proxyProfile: proxyProfile,
+		sessions:     sessions,
+		members:      members,
+		desktop:      desktop,
+		capture:      capture,
+		routers:      make(map[string]func(types.Router)),
 		oauth: newOAuthHandler(
 			oauth.NewService(memberConfig.OAuth, sessions),
 			pathPrefix,
@@ -54,6 +67,8 @@ func New(
 
 func (api *ApiManagerCtx) Route(r types.Router) {
 	r.Post("/login", api.Login)
+	r.Get("/proxy/config", api.ProxyLoginConfig)
+	r.Post("/proxy/login", api.ProxyLogin)
 	r.Get("/oauth/config", api.OAuthConfig)
 	r.Get("/oauth/login", api.OAuthLogin)
 	r.Get("/oauth/callback", api.OAuthCallback)
