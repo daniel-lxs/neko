@@ -2,6 +2,10 @@ name: Build Base Image
 
 on:
   workflow_call:
+    secrets:
+      GHCR_ACCESS_TOKEN:
+        required: true
+        description: "Registry token with packages:write; callers can pass secrets.GITHUB_TOKEN."
     inputs:
       flavor:
         required: false
@@ -35,6 +39,8 @@ env:
 jobs:
   build-client:
     name: Build Client Artifacts
+    permissions:
+      contents: read
     uses: ./.github/workflows/client_build.yml
 
   build-base:

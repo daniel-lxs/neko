@@ -1,0 +1,34 @@
+name: Publish Main Images
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-base:
+    name: Base Image
+    if: github.repository == 'daniel-lxs/neko'
+    uses: ./.github/workflows/image_base.yml
+    with:
+      platforms: linux/amd64
+      latest: false
+      latest_major: false
+    secrets:
+      GHCR_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-chromium:
+    name: Chromium Image
+    needs: build-base
+    uses: ./.github/workflows/image_app.yml
+    with:
+      name: chromium
+      platforms: linux/amd64
+      latest: false
+      latest_major: false
+    secrets:
+      GHCR_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,10 @@ name: Build App Image
 
 on:
   workflow_call:
+    secrets:
+      GHCR_ACCESS_TOKEN:
+        required: true
+        description: "Registry token with packages:write; callers can pass secrets.GITHUB_TOKEN."
     inputs:
       name:
         required: true
