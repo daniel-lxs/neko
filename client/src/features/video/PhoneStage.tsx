@@ -63,7 +63,12 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
 
   useEffect(() => {
     const box = area.current!
-    const observer = new ResizeObserver(() => setSize({ width: box.clientWidth, height: box.clientHeight }))
+    const observer = new ResizeObserver(() => {
+      // Fit the remote to the full layout viewport, not the visual viewport's keyboard
+      // animation. Only the local player/controls should shrink while the keyboard is open.
+      const controlsHeight = box.parentElement!.clientHeight - box.clientHeight
+      setSize({ width: box.clientWidth, height: window.innerHeight - controlsHeight })
+    })
     observer.observe(box)
     return () => observer.disconnect()
   }, [])
