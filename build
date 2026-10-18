@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")"
 
@@ -20,7 +20,7 @@ fi
 #fi
 
 function log() {
-  echo "$(date +'%Y-%m-%d %H:%M:%S') - [NEKO] - $1" > /dev/stderr
+  echo "$(date +'%Y-%m-%d %H:%M:%S') - [NEKO] - $1" >&2
 }
 
 function help() {
