@@ -20,7 +20,7 @@ import { useNeko } from '@/state/provider'
 import { useActions } from '@/state/actions'
 import { cn } from '@/lib/utils'
 import { IconButton } from '@/components/IconButton'
-import { Player } from './Player'
+import { PhonePlayer } from './PhonePlayer'
 
 const control =
   'size-11 shrink-0 rounded-full text-white transition-colors hover:bg-white/10 active:bg-white/20 disabled:opacity-35 disabled:cursor-default'
@@ -30,11 +30,10 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const { t } = useTranslation()
   const { client, overlay } = useNeko()
   const actions = useActions()
-  const { hosting, admin, allowed, clipboardAllowed, locked, keyboard, connected, video } = useStore(
+  const { hosting, allowed, clipboardAllowed, locked, keyboard, connected, video } = useStore(
     client.store,
     useShallow((s) => ({
       hosting: selectControlling(s),
-      admin: selectIsAdmin(s),
       allowed: !!selectSession(s)?.profile.can_host && (!s.settings.locked_controls || selectIsAdmin(s)),
       clipboardAllowed: !!selectSession(s)?.profile.can_access_clipboard,
       locked: s.control.locked,
@@ -44,8 +43,6 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
     })),
   )
   const stage = useRef<HTMLDivElement>(null)
-  const area = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: 0, height: 0 })
   const [message, setMessage] = useState('')
   const [reading, setReading] = useState(false)
   const [copying, setCopying] = useState(false)
@@ -57,11 +54,9 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const [hiddenAt, setHiddenAt] = useState('')
   const [pressing, setPressing] = useState(false)
   const pointers = useRef(new Set<number>())
-  const revealPointers = useRef(new Set<number>())
-  const [revealing, setRevealing] = useState(false)
   const idleKey = [activity, connected, hosting, locked, keyboard, reading, copying, video.playing, message].join(':')
   const keepControls = !connected || !video.playing || keyboard || reading || copying || pressing
-  const controlsShown = !revealing && (keepControls || hiddenAt !== idleKey)
+  const controlsShown = keepControls || hiddenAt !== idleKey
   const noteActivity = () => setActivity((value) => value + 1)
 
   useEffect(() => {
@@ -85,9 +80,7 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
     }
     const cancel = () => {
       pointers.current.clear()
-      revealPointers.current.clear()
       setPressing(false)
-      setRevealing(false)
       setActivity((value) => value + 1)
     }
     window.addEventListener('blur', cancel)
@@ -128,49 +121,6 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
       stop()
     }
   }, [client])
-
-  useEffect(() => {
-    const box = area.current!
-    const observer = new ResizeObserver(() => {
-      // Fit the remote to the full layout viewport, not the visual viewport's keyboard
-      // animation. Only the local player/controls should shrink while the keyboard is open.
-      const controlsHeight = box.parentElement!.clientHeight - box.clientHeight
-      setSize({ width: box.clientWidth, height: window.innerHeight - controlsHeight })
-    })
-    observer.observe(box)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    // Resolution belongs to the shared desktop. Only its current admin controller follows
-    // this viewport; spectators and an open software keyboard must never resize the room.
-    if (hideControls || !hosting || !admin || !connected || keyboard || size.width < 320 || size.height < 160) return
-    // Xorg rounds widths to eight pixels; use even heights for the video encoder.
-    // Chromium's desktop window needs at least 500px. Keep the phone aspect ratio
-    // at a 512px minimum rather than shrinking the desktop below the application's limit.
-    const width = Math.max(512, Math.floor(size.width / 8) * 8)
-    const height = Math.floor((size.height * width) / size.width / 2) * 2
-    let active = true
-    const timer = window.setTimeout(() => {
-      if (
-        !client.controlling ||
-        !client.isAdmin ||
-        client.state.mobile_keyboard_open ||
-        (window.visualViewport && window.visualViewport.scale !== 1)
-      )
-        return
-      const current = client.state.screen.size
-      if (current.width === width && current.height === height) return
-      // The server owns this temporary size and restores it when control or the session ends.
-      void client.api
-        .req('POST', '/room/screen/temporary', { width, height, rate: current.rate })
-        .catch(() => active && setMessage(t('phone.resize_failed')))
-    }, 250)
-    return () => {
-      active = false
-      clearTimeout(timer)
-    }
-  }, [client, hideControls, hosting, admin, connected, keyboard, size, t])
 
   const paste = async () => {
     if (!client.controlling || client.state.control.locked || reading) return
@@ -251,16 +201,21 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
         onFocusCapture={() => controlsShown && noteActivity()}
         onBlurCapture={() => controlsShown && noteActivity()}
       >
-        <div
-          ref={area}
-          className="absolute inset-0 overflow-hidden"
-          data-testid="phone-screen"
-          onPointerDownCapture={() => {
-            if (!hideControls && !hosting && allowed && connected && video.playable) client.request()
+        <PhonePlayer
+          onTap={() => {
+            if (!controlsShown) {
+              noteActivity()
+              return false
+            }
+            noteActivity()
+            if (hideControls) return false
+            if (!client.controlling && allowed && client.connected && client.state.video.playable) {
+              client.request()
+              return false
+            }
+            return true
           }}
-        >
-          <Player transport={client.transport} />
-        </div>
+        />
         {!hideControls && controlsShown && (
           <>
             <div className="pointer-events-none absolute inset-x-3 top-[max(12px,env(safe-area-inset-top))] flex items-center justify-between gap-3">
@@ -355,28 +310,11 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
         {!hideControls && !controlsShown && (
           <button
             type="button"
-            className="absolute inset-0 h-full w-full touch-none bg-transparent"
-            aria-label={t('phone.show_controls')}
-            data-testid="phone-reveal"
-            onPointerDown={(event) => {
-              revealPointers.current.add(event.pointerId)
-              setRevealing(true)
-            }}
-            onPointerUp={(event) => revealPointers.current.delete(event.pointerId)}
-            onPointerCancel={(event) => {
-              revealPointers.current.delete(event.pointerId)
-              if (!revealPointers.current.size) setRevealing(false)
-            }}
-            onClick={(event) => {
-              // Keep this sibling shield mounted for the complete tap sequence.
-              // Revealing on pointerdown would expose the remote to its release/click.
-              event.preventDefault()
-              event.stopPropagation()
-              if (revealPointers.current.size) return
-              setRevealing(false)
-              noteActivity()
-            }}
-          />
+            className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:rounded-full focus:bg-black focus:p-3 focus:text-white"
+            onClick={noteActivity}
+          >
+            {t('phone.show_controls')}
+          </button>
         )}
         {video.playable && (!video.playing || (controlsShown && video.muted && video.mutedByAutoplay)) && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

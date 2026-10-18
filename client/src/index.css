@@ -184,3 +184,23 @@
     outline: 2px solid var(--color-style-primary);
   }
 }
+
+@keyframes phone-tap-ripple {
+  from {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+.phone-tap-ripple {
+  animation: phone-tap-ripple 500ms ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-tap-ripple {
+    animation: none;
+    transform: translate(-50%, -50%);
+  }
+}
