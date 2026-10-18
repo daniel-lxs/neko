@@ -132,7 +132,7 @@ test('every language has the three files, en every key, the others all but the k
     'phone.copy',
     'phone.copied',
     'phone.copy_failed',
-    'phone.remote_browser',
+    'phone.show_controls',
     'phone.reload',
     'phone.back',
     'phone.forward',
