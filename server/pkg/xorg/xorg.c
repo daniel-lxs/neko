@@ -154,98 +154,57 @@ KeyCode XKeyEntryGet(KeySym keysym) {
   return 0;
 }
 
-// From https://github.com/TigerVNC/tigervnc/blob/0946e298075f8f7b6d63e552297a787c5f84d27c/unix/x0vncserver/XDesktop.cxx#L343-L379
-KeyCode XkbKeysymToKeycode(Display* dpy, KeySym keysym) {
-  XkbDescPtr xkb;
-  XkbStateRec state;
-  unsigned int mods;
-  unsigned keycode;
-
-  xkb = XkbGetMap(dpy, XkbAllComponentsMask, XkbUseCoreKbd);
+static KeyCode XkbKeysymForState(Display* dpy, KeySym keysym, unsigned int mods) {
+  XkbDescPtr xkb = XkbGetMap(dpy, XkbAllComponentsMask, XkbUseCoreKbd);
   if (!xkb)
     return 0;
 
-  XkbGetState(dpy, XkbUseCoreKbd, &state);
-  // XkbStateFieldFromRec() doesn't work properly because
-  // state.lookup_mods isn't properly updated, so we do this manually
-  mods = XkbBuildCoreState(XkbStateMods(&state), state.group);
-
-  for (keycode = xkb->min_key_code;
-       keycode <= xkb->max_key_code;
-       keycode++) {
-    KeySym cursym;
-    unsigned int out_mods;
-    XkbTranslateKeyCode(xkb, keycode, mods, &out_mods, &cursym);
-    if (cursym == keysym)
+  unsigned int keycode;
+  for (keycode = xkb->min_key_code; keycode <= xkb->max_key_code; keycode++) {
+    KeySym symbol;
+    unsigned int consumed;
+    XkbTranslateKeyCode(xkb, keycode, mods, &consumed, &symbol);
+    if (symbol == keysym)
       break;
   }
-
   if (keycode > xkb->max_key_code)
     keycode = 0;
-
   XkbFreeKeyboard(xkb, XkbAllComponentsMask, True);
-
-  // Shift+Tab is usually ISO_Left_Tab, but RFB hides this fact. Do
-  // another attempt if we failed the initial lookup
-  if ((keycode == 0) && (keysym == XK_Tab) && (mods & ShiftMask))
-    return XkbKeysymToKeycode(dpy, XK_ISO_Left_Tab);
-
   return keycode;
 }
 
-// From https://github.com/TigerVNC/tigervnc/blob/a434ef3377943e89165ac13c537cd0f28be97f84/unix/x0vncserver/XDesktop.cxx#L401-L453
+KeyCode XkbKeysymToKeycode(Display* dpy, KeySym keysym) {
+  XkbStateRec state;
+  XkbGetState(dpy, XkbUseCoreKbd, &state);
+  unsigned int mods = XkbBuildCoreState(XkbStateMods(&state), state.group);
+  KeyCode keycode = XkbKeysymForState(dpy, keysym, mods);
+  if (!keycode && keysym == XK_Tab && (mods & ShiftMask))
+    return XkbKeysymForState(dpy, XK_ISO_Left_Tab, mods);
+  return keycode;
+}
+
+// Add a literal keysym when the current layout cannot produce it. Use the core
+// mapping request so applications receive MappingNotify as well as XKB updates.
 KeyCode XkbAddKeyKeysym(Display* dpy, KeySym keysym) {
-  int types[1];
-  unsigned int key;
-  XkbDescPtr xkb;
-  XkbMapChangesRec changes;
-  KeySym *syms;
-  KeySym upper, lower;
-
-  xkb = XkbGetMap(dpy, XkbAllComponentsMask, XkbUseCoreKbd);
-
+  XkbDescPtr xkb = XkbGetMap(dpy, XkbAllComponentsMask, XkbUseCoreKbd);
   if (!xkb)
     return 0;
 
+  unsigned int key;
   for (key = xkb->max_key_code; key >= xkb->min_key_code; key--) {
     if (XkbKeyNumGroups(xkb, key) == 0)
       break;
   }
-
-  // no free keycodes
-  if (key < xkb->min_key_code)
+  KeyCode keycode = key >= xkb->min_key_code ? key : 0;
+  XkbFreeKeyboard(xkb, XkbAllComponentsMask, True);
+  if (!keycode)
     return 0;
 
-  // assign empty structure
-  changes = *(XkbMapChangesRec *) malloc(sizeof(XkbMapChangesRec));
-  for (int i = 0; i < sizeof(changes); i++) ((char *) &changes)[i] = 0;
-
-  XConvertCase(keysym, &lower, &upper);
-
-  if (upper == lower)
-    types[XkbGroup1Index] = XkbOneLevelIndex;
-  else
-    types[XkbGroup1Index] = XkbAlphabeticIndex;
-
-  XkbChangeTypesOfKey(xkb, key, 1, XkbGroup1Mask, types, &changes);
-
-  syms = XkbKeySymsPtr(xkb,key);
-  if (upper == lower)
-    syms[0] = keysym;
-  else {
-    syms[0] = lower;
-    syms[1] = upper;
-  }
-
-  changes.changed |= XkbKeySymsMask;
-  changes.first_key_sym = key;
-  changes.num_key_syms = 1;
-
-  if (XkbChangeMap(dpy, xkb, &changes)) {
-    return key;
-  }
-
-  return 0;
+  // Both levels are literal. Inferring an alphabetic pair would turn an
+  // uppercase text/IME keysym into lowercase when no physical Shift is held.
+  KeySym symbols[2] = { keysym, keysym };
+  XChangeKeyboardMapping(dpy, keycode, 2, symbols, 1);
+  return keycode;
 }
 
 void XKey(KeySym keysym, int down) {
@@ -262,7 +221,21 @@ void XKey(KeySym keysym, int down) {
   if (keycode == 0)
     keycode = XkbKeysymToKeycode(display, keysym);
 
-  // Map non-existing keysyms to new keycodes
+  // Software keyboards and IMEs send characters without a held physical
+  // Shift key. Prefer the layout's existing shifted key over adding a new
+  // mapping, which applications may not have refreshed before this keypress.
+  if (keycode == 0 && down) {
+    XkbStateRec state;
+    XkbGetState(display, XkbUseCoreKbd, &state);
+    unsigned int mods = XkbBuildCoreState(XkbStateMods(&state), state.group);
+    if (!(mods & ShiftMask)) {
+      keycode = XkbKeysymForState(display, keysym, mods | ShiftMask);
+      if (keycode)
+        XkbLatchModifiers(display, XkbUseCoreKbd, ShiftMask, ShiftMask);
+    }
+  }
+
+  // Symbols absent from the layout still need a literal fallback mapping.
   if (keycode == 0)
     keycode = XkbAddKeyKeysym(display, keysym);
 

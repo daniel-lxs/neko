@@ -309,6 +309,19 @@ maps through the rendered image bounds to a remote mouse click and shows a local
 Letterbox taps do not click the desktop. A pinch, cancelled gesture, long press or ownership
 change cancels its pending tap. The keyboard still uses the existing input overlay.
 
+The Keyboard button opens the local software keyboard. Stream gestures preserve that input's
+focus while it is open; the button and Safari's Done action can still dismiss it. Text input
+uses literal X11 keysyms, including uppercase text without a physical Shift event.
+
+Remote-field autofocus is not implemented. Chromium could report editable focus through a
+loopback-only DevTools connection, a per-frame focus listener and a server-to-viewer event.
+That would also need to track active tabs, navigation, frames and control ownership, without
+exposing the debugging port to viewers. It would not by itself open Safari's software keyboard:
+an asynchronous network event is outside the local user gesture required by iOS. See
+[WebKit's explanation](https://bugs.webkit.org/show_bug.cgi?id=195884#c4). Speculatively opening
+the keyboard on every stream tap or pre-focusing a dummy input would be workarounds, so neither
+is used here.
+
 Phone controls hide after three seconds without interaction. The first tap while hidden
 reveals them and is consumed locally; the next tap can interact with the remote. Pinch/pan
 remain available while controls are hidden. Desktop layout and automatic sign-in are unchanged.

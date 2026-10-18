@@ -13,6 +13,7 @@ const midpoint = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y +
 export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
   const { client } = useNeko()
   const frame = useRef<HTMLDivElement>(null)
+  const gestures = useRef<HTMLDivElement>(null)
   const points = useRef(new Map<number, Point>())
   const tap = useRef<{
     id: number
@@ -43,6 +44,15 @@ export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
   }
 
   useEffect(() => {
+    // iOS dismisses the keyboard after a touch outside the focused textarea,
+    // even when pointerdown was cancelled. Cancel that touch default as well;
+    // our pointer handlers still own the remote tap, pinch and pan. React's
+    // delegated touch listeners are passive, so this must be a native listener.
+    const surface = gestures.current!
+    const keepKeyboard = (event: TouchEvent) => {
+      if (client.state.mobile_keyboard_open) event.preventDefault()
+    }
+    surface.addEventListener('touchstart', keepKeyboard, { passive: false })
     const cancel = () => {
       points.current.clear()
       tap.current = null
@@ -85,6 +95,7 @@ export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
     )
     window.addEventListener('blur', cancel)
     return () => {
+      surface.removeEventListener('touchstart', keepKeyboard)
       observer.disconnect()
       unwatch()
       unsize()
@@ -208,6 +219,7 @@ export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
         <Player transport={client.transport} />
       </div>
       <div
+        ref={gestures}
         className="absolute inset-0 touch-none"
         data-testid="phone-gesture-surface"
         onPointerDown={down}
