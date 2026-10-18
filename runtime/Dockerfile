@@ -64,6 +64,8 @@ RUN set -eux; \
     fi; \
     # install fonts
     apt-get install -y --no-install-recommends \
+        # Arial, Helvetica, Times and Courier compatible fonts
+        fonts-liberation \
         # Emojis
         fonts-noto-color-emoji \
         # Chinese fonts
