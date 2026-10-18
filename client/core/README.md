@@ -160,13 +160,13 @@ media calls below go through the transport. `mount(client, el)` (a plain functio
 attaches the transport and an `Overlay` into a box it letterboxes inside `el`, and returns the
 function that takes them out again.
 
-| method / field                       |                                                                                                          |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `transport.attach(box)`              | the media element into `box`; returns the detach function                                                |
-| `transport.element`                  | the transport's media element (a `<video>` for WebRTC), once attached                                    |
-| `play()`, `pause()`                  | when the browser refuses sound, `play()` starts muted (`mutedByAutoplay`) and unmutes on the first click |
-| `mute()`, `unmute()`, `setVolume(v)` | `v` in 0..1                                                                                              |
-| `shareMedia(stream)`                 | send local media (microphone) on a transport that can; returns the function that stops sharing it        |
+| method / field                       |                                                                                                                 |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `transport.attach(box)`              | the media element into `box`; returns the detach function                                                       |
+| `transport.element`                  | the transport's media element (a `<video>` for WebRTC), once attached                                           |
+| `play()`, `pause()`                  | when the browser refuses sound, `play()` starts muted (`mutedByAutoplay`) and unmutes on the first tap or click |
+| `mute()`, `unmute()`, `setVolume(v)` | `v` in 0..1                                                                                                     |
+| `shareMedia(stream)`                 | send local media (microphone) on a transport that can; returns the function that stops sharing it               |
 
 ### Control and input
 

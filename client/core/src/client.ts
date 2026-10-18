@@ -632,7 +632,7 @@ export class NekoClient {
   /////////////////////////////
 
   // when the browser refuses sound, playback starts muted (video.mutedByAutoplay) and unmutes on
-  // the first click
+  // the first tap or click
   play() {
     return this.transport.setPlaying(true)
   }

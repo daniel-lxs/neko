@@ -26,6 +26,7 @@ export class WebRTCTransport implements StreamTransport {
     video: { playable: false, playing: false, volume: 1, muted: false, mutedByAutoplay: false },
   }
   private video: HTMLVideoElement | null = null
+  private autoplayUnmute: AbortController | null = null
   private session: SessionInfo | null = null
   private unsubs: (() => void)[] = []
   private pc: RTCPeerConnection | null = null
@@ -80,6 +81,7 @@ export class WebRTCTransport implements StreamTransport {
   // the stream is over: the peer, timers, counters and the picture go (a reconnect does not come
   // through here but through connect(), which keeps the picture)
   close() {
+    this.autoplayUnmute?.abort()
     this.unsubscribe()
     this.session = null
     this.closePeer()
@@ -189,6 +191,7 @@ export class WebRTCTransport implements StreamTransport {
   /////////////////////////////
 
   attach(container: HTMLElement) {
+    this.autoplayUnmute?.abort()
     this.video?.remove() // a second attach replaces the element
     const video = (this.video = document.createElement('video'))
     video.playsInline = true
@@ -210,7 +213,10 @@ export class WebRTCTransport implements StreamTransport {
     this.emitState()
     return () => {
       video.remove()
-      if (this.video === video) this.video = null
+      if (this.video === video) {
+        this.autoplayUnmute?.abort()
+        this.video = null
+      }
     }
   }
 
@@ -225,6 +231,7 @@ export class WebRTCTransport implements StreamTransport {
   }
 
   setMuted(on: boolean) {
+    this.autoplayUnmute?.abort()
     if (this.video) this.video.muted = on
     if (!on) {
       this.state.video.mutedByAutoplay = false
@@ -239,13 +246,18 @@ export class WebRTCTransport implements StreamTransport {
       await video.play()
     } catch (err) {
       if (video.muted || (err as DOMException).name !== 'NotAllowedError') throw err
-      // autoplay with sound is blocked until the user interacts: play muted,
-      // unmute on the first click anywhere
+      // Autoplay with sound is blocked until the user interacts. The phone gesture
+      // surface suppresses clicks, so also handle touchend, within Safari's activation.
       video.muted = true
       this.state.video.mutedByAutoplay = true
       this.emitState()
+      this.autoplayUnmute?.abort()
+      const { signal } = (this.autoplayUnmute = new AbortController())
       await video.play()
-      document.addEventListener('click', () => this.setMuted(false), { once: true })
+      if (signal.aborted || this.video !== video) return
+      const unmute = () => this.setMuted(false) // aborts both listeners after either gesture
+      document.addEventListener('touchend', unmute, { capture: true, signal })
+      document.addEventListener('click', unmute, { capture: true, signal })
     }
   }
 
