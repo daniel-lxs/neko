@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
-// Include a phone turned sideways; a short desktop window still uses the desktop layout.
-const query = '(max-width: 768px) and (pointer: coarse), (max-height: 500px) and (pointer: coarse)'
+// Phones and tablets share the touch viewer, independent of rotation or window size.
+// Mouse-primary desktops keep the desktop viewer, including those with a touch screen.
+const query = '(pointer: coarse)'
 
 export function usePhoneLayout() {
   const [phone, setPhone] = useState(() => window.matchMedia(query).matches)
