@@ -852,6 +852,42 @@ paths:
             schema:
               $ref: '#/components/schemas/ScreenConfiguration'
         required: true
+  /api/room/screen/temporary:
+    post:
+      tags:
+        - room-screen
+      summary: Temporarily Fit Screen to the Controller
+      description: >-
+        Set a temporary screen configuration for the connected admin host. The server
+        saves the original configuration once and restores it when that host releases
+        control, loses control, disconnects, is deleted, or loses the required permissions.
+        Unexpected websocket disconnects use the existing reconnect grace period.
+        A successful permanent screen change supersedes this temporary configuration.
+      operationId: screenTemporaryChange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreenConfiguration'
+      responses:
+        '200':
+          description: Temporary screen configuration applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenConfiguration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Invalid configuration or the session is no longer the connected admin host.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
   /api/room/screen/configurations:
     get:
       tags:

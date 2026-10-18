@@ -85,24 +85,6 @@ func (manager *DesktopManagerCtx) ScreenConfigurations() []types.ScreenSize {
 	return configs
 }
 
-func (manager *DesktopManagerCtx) SetScreenSize(screenSize types.ScreenSize) (types.ScreenSize, error) {
-	mu.Lock()
-	manager.emmiter.Emit("before_screen_size_change")
-
-	defer func() {
-		manager.emmiter.Emit("after_screen_size_change")
-		mu.Unlock()
-	}()
-
-	screenSize, err := xorg.ChangeScreenSize(screenSize)
-	if err == nil {
-		// cache the new screen size
-		manager.screenSize = screenSize
-	}
-
-	return screenSize, err
-}
-
 func (manager *DesktopManagerCtx) GetScreenSize() types.ScreenSize {
 	return xorg.GetScreenSize()
 }

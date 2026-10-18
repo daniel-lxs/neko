@@ -102,6 +102,7 @@ func (h *RoomHandler) Route(r types.Router) {
 	r.With(auth.CanWatchOnly).Route("/screen", func(r types.Router) {
 		r.Get("/", h.screenConfiguration)
 		r.With(auth.AdminsOnly).Post("/", h.screenConfigurationChange)
+		r.With(auth.AdminsOnly).With(auth.HostsOnly).Post("/temporary", h.screenTemporaryChange)
 		r.With(auth.AdminsOnly).Get("/configurations", h.screenConfigurationsList)
 
 		r.Get("/cast.jpg", h.screenCastGet)

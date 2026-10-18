@@ -144,6 +144,7 @@ func (c *serve) Start(cmd *cobra.Command) {
 
 	c.managers.desktop = desktop.New(
 		&c.configs.Desktop,
+		c.managers.session,
 	)
 	c.managers.desktop.Start()
 
