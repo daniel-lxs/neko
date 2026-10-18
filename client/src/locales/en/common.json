@@ -31,6 +31,7 @@
     }
   },
   "controls": {
+    "paste": "Paste",
     "release": "Release Controls",
     "request": "Request Controls",
     "lock": "Lock Controls",
