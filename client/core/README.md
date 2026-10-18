@@ -339,3 +339,5 @@ clipboard text. This requires a secure browser context supporting `ClipboardItem
 view sets it to `false` while mounted so only explicit Copy actions change the local clipboard.
 An explicit copy suppresses background writes until its native write settles, even when normal
 sync is enabled, to prevent a background write from cancelling Safari's pending ClipboardItem.
+
+With `autologin`, a missing/expired session (401) can use the server’s opt-in trusted-proxy login. A disabled session (403) is never automatically replaced. Password login remains available. See `webpage/docs/configuration/proxy-login.md`.

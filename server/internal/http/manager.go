@@ -62,6 +62,7 @@ func New(WebSocketManager types.WebSocketManager, ApiManager types.ApiManager, c
 		Excluded: []string{
 			"/api/batch", // do not allow batchception
 			"/api/ws",
+			"/api/proxy/login",
 		},
 	}
 	router.Post("/api/batch", batch.Handle)

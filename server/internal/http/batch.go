@@ -75,6 +75,8 @@ func (b *batchHandler) Handle(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 
+		req.Header.Del("Neko-Proxy-Secret")
+
 		// execute request
 		rr := newResponseRecorder()
 		b.Router.ServeHTTP(rr, req)
