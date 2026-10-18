@@ -326,3 +326,16 @@ The tests and dist.check.mjs run under Node with a few browser globals stubbed, 
 machine and the store are tested without a browser. The GUI in `../src` consumes this package from source
 through the `@m1k1o/neko` alias in `../tsconfig.json` and `../vite.config.ts`; consumers of the npm
 package get `dist/`.
+
+### Copying a remote selection to the local clipboard
+
+Call `client.copySelectionToClipboard(signal?)` directly from a click handler. It begins the
+native Clipboard API write during that gesture, sends the remote `control/copy` command, and
+supplies the text when `room.clipboard.updated` arrives. A three-second timeout, empty/non-text
+selection, loss of access or an aborted signal rejects the operation instead of returning cached
+clipboard text. This requires a secure browser context supporting `ClipboardItem`.
+
+`client.syncClipboard` defaults to `true`, preserving desktop background clipboard sync. A phone
+view sets it to `false` while mounted so only explicit Copy actions change the local clipboard.
+An explicit copy suppresses background writes until its native write settles, even when normal
+sync is enabled, to prevent a background write from cancelling Safari's pending ClipboardItem.

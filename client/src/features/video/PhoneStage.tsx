@@ -3,14 +3,29 @@ import { useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { selectControlling, selectIsAdmin, selectSession } from '@m1k1o/neko'
 import { useTranslation } from 'react-i18next'
-import { ClipboardIcon, KeyboardIcon, MouseIcon, PlayIcon, SpeakerHighIcon } from '@phosphor-icons/react'
+import {
+  IconContext,
+  ClipboardTextIcon,
+  CopySimpleIcon,
+  KeyboardIcon,
+  CursorIcon,
+  HandPalmIcon,
+  MonitorIcon,
+  ArrowClockwiseIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+  PlayIcon,
+  SpeakerHighIcon,
+} from '@phosphor-icons/react'
 import { useNeko } from '@/state/provider'
 import { useActions } from '@/state/actions'
 import { cn } from '@/lib/utils'
+import { IconButton } from '@/components/IconButton'
 import { Player } from './Player'
 
 const control =
-  'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-base leading-tight font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-40'
+  'size-11 shrink-0 rounded-full text-white transition-colors hover:bg-white/10 active:bg-white/20 disabled:opacity-35 disabled:cursor-default'
+const pill = 'pointer-events-auto flex rounded-full border border-white/15 bg-black/80 p-1 shadow-lg backdrop-blur-xl'
 
 export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const { t } = useTranslation()
@@ -33,13 +48,18 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [message, setMessage] = useState('')
   const [reading, setReading] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const copyAbort = useRef<AbortController | null>(null)
   const pasteGeneration = useRef(0)
   const mounted = useRef(false)
 
   useEffect(() => {
     mounted.current = true
+    const syncClipboard = client.syncClipboard
+    client.syncClipboard = false
     const invalidate = () => {
       pasteGeneration.current++
+      copyAbort.current?.abort()
     }
     // Even losing and regaining the same control/session cancels a pending permission prompt.
     const stop = client.store.subscribe(
@@ -56,6 +76,7 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
     )
     return () => {
       mounted.current = false
+      client.syncClipboard = syncClipboard
       invalidate()
       stop()
     }
@@ -138,75 +159,156 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
     }
   }
 
+  const copy = async () => {
+    if (copying || reading) return
+    const abort = new AbortController()
+    copyAbort.current = abort
+    setCopying(true)
+    setMessage('')
+    try {
+      await client.copySelectionToClipboard(abort.signal)
+      if (mounted.current && !abort.signal.aborted) setMessage(t('phone.copied'))
+    } catch {
+      if (mounted.current) setMessage(t('phone.copy_failed'))
+    } finally {
+      if (copyAbort.current === abort) copyAbort.current = null
+      if (mounted.current) setCopying(false)
+    }
+  }
+
+  const active = connected && hosting && !locked
+  const shortcut = (key: number, modifier?: number) => {
+    if (!client.connected || !client.controlling || client.state.control.locked) return
+    if (modifier) client.input.key(modifier, true)
+    client.input.key(key, true)
+    client.input.key(key, false)
+    if (modifier) client.input.key(modifier, false)
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background-tertiary" data-testid="phone-stage">
-      <div ref={area} className="relative min-h-0 flex-1 overflow-hidden bg-black" data-testid="phone-screen">
-        <Player transport={client.transport} />
+    <IconContext.Provider value={{ weight: 'regular' }}>
+      <div className="relative h-full min-h-0 bg-black" data-testid="phone-stage">
+        <div
+          ref={area}
+          className="absolute inset-0 overflow-hidden"
+          data-testid="phone-screen"
+          onPointerDownCapture={() => {
+            if (!hideControls && !hosting && allowed && connected && video.playable) client.request()
+          }}
+        >
+          <Player transport={client.transport} />
+        </div>
+        {!hideControls && (
+          <>
+            <div className="pointer-events-none absolute inset-x-3 top-[max(12px,env(safe-area-inset-top))] flex items-center justify-between gap-3">
+              <div className={pill}>
+                <IconButton
+                  label={t(hosting ? (locked ? 'phone.unlock' : 'phone.release') : 'phone.take')}
+                  className={cn(control, hosting && 'bg-white/15')}
+                  disabled={!connected || !video.playable || (!hosting && !allowed)}
+                  aria-pressed={hosting}
+                  onClick={() => {
+                    setMessage('')
+                    if (hosting && locked) client.unlock()
+                    else actions.toggleControl()
+                  }}
+                >
+                  {hosting ? <HandPalmIcon className="size-6" /> : <CursorIcon className="size-6" />}
+                </IconButton>
+              </div>
+              <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/15 bg-black/80 px-4 py-3 text-sm leading-5 text-white backdrop-blur-xl">
+                <MonitorIcon className="size-4 shrink-0" />
+                <span className="truncate">{t('phone.remote_browser')}</span>
+              </div>
+              <div className={pill}>
+                <IconButton
+                  label={t('phone.reload')}
+                  className={control}
+                  disabled={!active}
+                  onClick={() => shortcut(0xffc2)}
+                >
+                  <ArrowClockwiseIcon className="size-6" />
+                </IconButton>
+              </div>
+            </div>
+            <div
+              className="pointer-events-none absolute inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] flex items-end justify-between gap-3"
+              data-testid="phone-controls"
+            >
+              <div className={pill}>
+                <IconButton
+                  label={t('phone.back')}
+                  className={control}
+                  disabled={!active}
+                  onClick={() => shortcut(0xff51, 0xffe9)}
+                >
+                  <CaretLeftIcon className="size-6" />
+                </IconButton>
+                <IconButton
+                  label={t('phone.forward')}
+                  className={control}
+                  disabled={!active}
+                  onClick={() => shortcut(0xff53, 0xffe9)}
+                >
+                  <CaretRightIcon className="size-6" />
+                </IconButton>
+              </div>
+              <div className={pill} data-testid="phone-tools">
+                <IconButton
+                  label={t('phone.keyboard')}
+                  className={cn(control, keyboard && 'bg-white/20')}
+                  disabled={!active}
+                  aria-pressed={keyboard}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => overlay.mobileKeyboardToggle()}
+                >
+                  <KeyboardIcon className="size-6" />
+                </IconButton>
+                <IconButton
+                  label={t('phone.copy')}
+                  className={control}
+                  disabled={!active || !clipboardAllowed || copying || reading}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={copy}
+                >
+                  <CopySimpleIcon className="size-6" />
+                </IconButton>
+                <IconButton
+                  label={t('phone.paste')}
+                  className={control}
+                  disabled={!active || !clipboardAllowed || reading || copying}
+                  onClick={paste}
+                >
+                  <ClipboardTextIcon className="size-6" />
+                </IconButton>
+              </div>
+            </div>
+            {message && (
+              <p
+                role="status"
+                className="pointer-events-none absolute inset-x-3 bottom-19 mx-auto w-fit max-w-[calc(100%-24px)] rounded-xl bg-black/85 px-3 py-2 text-center text-sm leading-snug text-white"
+              >
+                {message}
+              </p>
+            )}
+          </>
+        )}
         {video.playable && (!video.playing || (video.muted && video.mutedByAutoplay)) && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <button
               type="button"
-              className={cn(control, 'pointer-events-auto flex-row gap-2 bg-style-primary px-5 text-black shadow-lg')}
+              className="pointer-events-auto flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-black/80 px-4 text-sm text-white shadow-lg"
               onClick={() => {
                 client.unmute()
                 if (!video.playing) void client.play().catch(() => setMessage(t('phone.play_failed')))
               }}
             >
-              {video.playing ? <SpeakerHighIcon className="size-6" /> : <PlayIcon className="size-6" />}
+              {video.playing ? <SpeakerHighIcon className="size-5" /> : <PlayIcon className="size-5" />}
               {t(video.playing ? 'phone.unmute' : 'phone.play')}
             </button>
           </div>
         )}
       </div>
-      {!hideControls && (
-        <div
-          className="shrink-0 border-t border-white/10 p-2 pb-[max(8px,env(safe-area-inset-bottom))]"
-          data-testid="phone-controls"
-        >
-          {message && (
-            <p role="status" className="mb-2 text-center text-sm leading-snug text-white">
-              {message}
-            </p>
-          )}
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              className={cn(control, 'bg-background-accent text-white')}
-              disabled={!connected || !video.playable || (!hosting && !allowed)}
-              onClick={() => {
-                setMessage('')
-                if (hosting && locked) client.unlock()
-                else actions.toggleControl()
-              }}
-            >
-              <MouseIcon className="size-6" />
-              {t(hosting ? (locked ? 'phone.unlock' : 'phone.release') : 'phone.take')}
-            </button>
-            {clipboardAllowed && (
-              <button
-                type="button"
-                className={cn(control, 'bg-style-primary text-black')}
-                disabled={!connected || !hosting || locked || reading}
-                onClick={paste}
-              >
-                <ClipboardIcon className="size-6" />
-                {t('phone.paste')}
-              </button>
-            )}
-            <button
-              type="button"
-              className={cn(control, keyboard ? 'bg-white text-black' : 'bg-background-accent text-white')}
-              disabled={!connected || !hosting || locked}
-              aria-pressed={keyboard}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => overlay.mobileKeyboardToggle()}
-            >
-              <KeyboardIcon className="size-6" />
-              {t('phone.keyboard')}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </IconContext.Provider>
   )
 }
