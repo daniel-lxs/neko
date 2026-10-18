@@ -285,3 +285,20 @@ steps in a real Chromium-based browser instead of Playwright's, start it with
   every origin has (`crypto.randomUUID()` needs a secure context, and plain http on a LAN is not one).
 - File downloads are plain links so the browser streams them; the session token is added to the
   URL only when the server runs without cookies.
+
+### Phone viewer
+
+Coarse-pointer phone viewports use a full-height player and large Control, Paste and Keyboard
+buttons, without the desktop header or sidebar. Desktop pointer layouts keep the existing UI.
+Paste reads text through the Clipboard API during the button gesture; deployed sites need HTTPS,
+and Safari may show its native Paste confirmation. No manual clipboard box is shown on phones.
+Pending reads are cancelled when control, session or permissions change.
+
+While an admin controls from a phone, the viewer fits the remote desktop to its available aspect
+ratio at a minimum width of 512 pixels (Chromium windows require at least 500). The server owns
+this temporary resolution, saves the prior dimensions/rate once, and restores them on release,
+control handoff, disconnect, deletion or loss of privileges. A dropped socket uses Neko's existing
+five-second reconnect grace. A deliberate permanent screen change cancels the temporary override.
+Other viewers see this shared desktop; non-admin phones cannot resize it. Keyboard opening and
+pinch zoom do not resize the remote. Moving out of phone layout while retaining control keeps the
+current resolution until control is released or the session disconnects.

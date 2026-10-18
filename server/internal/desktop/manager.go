@@ -28,13 +28,17 @@ const (
 var mu = sync.Mutex{}
 
 type DesktopManagerCtx struct {
-	logger     zerolog.Logger
-	wg         sync.WaitGroup
-	shutdown   chan struct{}
-	emmiter    events.EventEmmiter
-	config     *config.Desktop
-	screenSize types.ScreenSize // cached screen size
-	input      xinput.Driver
+	logger          zerolog.Logger
+	wg              sync.WaitGroup
+	shutdown        chan struct{}
+	emmiter         events.EventEmmiter
+	config          *config.Desktop
+	screenSize      types.ScreenSize // cached screen size
+	sessions        types.SessionManager
+	temporaryScreen *temporaryScreenSize // guarded by mu
+	screenRevision  atomic.Uint64
+	screenNotifyMu  sync.Mutex
+	input           xinput.Driver
 
 	// Clipboard process holding the most recent clipboard data.
 	// It must remain running to allow pasting clipboard data.
@@ -42,7 +46,7 @@ type DesktopManagerCtx struct {
 	clipboardCommand atomic.Pointer[exec.Cmd]
 }
 
-func New(config *config.Desktop) *DesktopManagerCtx {
+func New(config *config.Desktop, sessions types.SessionManager) *DesktopManagerCtx {
 	var input xinput.Driver
 	if config.UseInputDriver {
 		input = xinput.NewDriver(config.InputSocket)
@@ -50,14 +54,20 @@ func New(config *config.Desktop) *DesktopManagerCtx {
 		input = xinput.NewDummy()
 	}
 
-	return &DesktopManagerCtx{
+	manager := &DesktopManagerCtx{
 		logger:     log.With().Str("module", "desktop").Logger(),
 		shutdown:   make(chan struct{}),
 		emmiter:    events.New(),
 		config:     config,
 		screenSize: config.ScreenSize,
 		input:      input,
+		sessions:   sessions,
 	}
+	sessions.OnHostChanged(func(_, _ types.Session) { manager.restoreTemporaryScreenSize() })
+	sessions.OnDisconnected(func(_ types.Session) { manager.restoreTemporaryScreenSize() })
+	sessions.OnDeleted(func(_ types.Session) { manager.restoreTemporaryScreenSize() })
+	sessions.OnProfileChanged(func(_ types.Session, _, _ types.MemberProfile) { manager.restoreTemporaryScreenSize() })
+	return manager
 }
 
 func (manager *DesktopManagerCtx) Start() {

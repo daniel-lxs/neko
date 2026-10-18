@@ -6,8 +6,6 @@ import (
 
 	"github.com/m1k1o/neko/server/pkg/auth"
 	"github.com/m1k1o/neko/server/pkg/types"
-	"github.com/m1k1o/neko/server/pkg/types/event"
-	"github.com/m1k1o/neko/server/pkg/types/message"
 	"github.com/m1k1o/neko/server/pkg/utils"
 )
 
@@ -29,18 +27,29 @@ func (h *RoomHandler) screenConfigurationChange(w http.ResponseWriter, r *http.R
 		Width:  data.Width,
 		Height: data.Height,
 		Rate:   data.Rate,
-	})
+	}, auth)
 
 	if err != nil {
 		return utils.HttpUnprocessableEntity("cannot set screen size").WithInternalErr(err)
 	}
 
-	h.sessions.Broadcast(event.SCREEN_UPDATED, message.ScreenSizeUpdate{
-		ID:         auth.ID(),
-		ScreenSize: size,
-	})
+	return utils.HttpSuccess(w, size)
+}
 
-	return utils.HttpSuccess(w, data)
+// Temporary dimensions belong to the connected admin controller, not to the HTTP request.
+// The desktop manager rechecks ownership under its resize lock and restores the saved size
+// on control loss or session end, even if the browser cannot send an unload request.
+func (h *RoomHandler) screenTemporaryChange(w http.ResponseWriter, r *http.Request) error {
+	session, _ := auth.GetSession(r)
+	data := &types.ScreenSize{}
+	if err := utils.HttpJsonRequest(w, r, data); err != nil {
+		return err
+	}
+	size, err := h.desktop.SetTemporaryScreenSize(*data, session)
+	if err != nil {
+		return utils.HttpUnprocessableEntity("cannot set temporary screen size").WithInternalErr(err)
+	}
+	return utils.HttpSuccess(w, size)
 }
 
 // TODO: remove.

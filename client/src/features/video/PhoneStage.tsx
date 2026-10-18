@@ -73,8 +73,10 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
     // this viewport; spectators and an open software keyboard must never resize the room.
     if (hideControls || !hosting || !admin || !connected || keyboard || size.width < 320 || size.height < 160) return
     // Xorg rounds widths to eight pixels; use even heights for the video encoder.
-    const width = Math.floor(size.width / 8) * 8
-    const height = Math.floor(size.height / 2) * 2
+    // Chromium's desktop window needs at least 500px. Keep the phone aspect ratio
+    // at a 512px minimum rather than shrinking the desktop below the application's limit.
+    const width = Math.max(512, Math.floor(size.width / 8) * 8)
+    const height = Math.floor((size.height * width) / size.width / 2) * 2
     let active = true
     const timer = window.setTimeout(() => {
       if (
@@ -86,9 +88,9 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
         return
       const current = client.state.screen.size
       if (current.width === width && current.height === height) return
-      // Use the existing API so unsupported screen modes report an error to this viewer.
+      // The server owns this temporary size and restores it when control or the session ends.
       void client.api
-        .req('POST', '/room/screen', { width, height, rate: current.rate })
+        .req('POST', '/room/screen/temporary', { width, height, rate: current.rate })
         .catch(() => active && setMessage(t('phone.resize_failed')))
     }, 250)
     return () => {
