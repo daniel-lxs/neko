@@ -326,3 +326,5 @@ The tests and dist.check.mjs run under Node with a few browser globals stubbed, 
 machine and the store are tested without a browser. The GUI in `../src` consumes this package from source
 through the `@m1k1o/neko` alias in `../tsconfig.json` and `../vite.config.ts`; consumers of the npm
 package get `dist/`.
+
+With `autologin`, a missing/expired session (401) can use the server’s opt-in trusted-proxy login. A disabled session (403) is never automatically replaced. Password login remains available. See `webpage/docs/configuration/proxy-login.md`.
