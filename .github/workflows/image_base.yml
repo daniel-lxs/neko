@@ -42,6 +42,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/client_build.yml
+    with:
+      artifact-name: ${{ inputs.flavor && format('client-{0}', inputs.flavor) || 'client' }}
 
   build-base:
     name: Build Base Image
@@ -56,7 +58,7 @@ jobs:
       - name: Download client dist
         uses: actions/download-artifact@v4
         with:
-          name: client
+          name: ${{ inputs.flavor && format('client-{0}', inputs.flavor) || 'client' }}
           path: client/dist
 
       - name: Set up QEMU

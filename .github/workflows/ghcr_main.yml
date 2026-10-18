@@ -32,3 +32,29 @@ jobs:
       latest_major: false
     secrets:
       GHCR_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-intel-base:
+    name: Intel Base Image
+    if: github.repository == 'daniel-lxs/neko'
+    uses: ./.github/workflows/image_base.yml
+    with:
+      flavor: intel
+      dockerfile: Dockerfile.intel
+      platforms: linux/amd64
+      latest: false
+      latest_major: false
+    secrets:
+      GHCR_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-intel-chromium:
+    name: Intel Chromium Image
+    needs: build-intel-base
+    uses: ./.github/workflows/image_app.yml
+    with:
+      name: chromium
+      flavor: intel
+      platforms: linux/amd64
+      latest: false
+      latest_major: false
+    secrets:
+      GHCR_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
