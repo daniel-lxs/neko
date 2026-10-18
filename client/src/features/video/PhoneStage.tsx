@@ -10,7 +10,6 @@ import {
   KeyboardIcon,
   CursorIcon,
   HandPalmIcon,
-  MonitorIcon,
   ArrowClockwiseIcon,
   CaretLeftIcon,
   CaretRightIcon,
@@ -44,6 +43,7 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
       video: s.video,
     })),
   )
+  const stage = useRef<HTMLDivElement>(null)
   const area = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [message, setMessage] = useState('')
@@ -52,6 +52,53 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const copyAbort = useRef<AbortController | null>(null)
   const pasteGeneration = useRef(0)
   const mounted = useRef(false)
+
+  const [activity, setActivity] = useState(0)
+  const [hiddenAt, setHiddenAt] = useState('')
+  const [pressing, setPressing] = useState(false)
+  const pointers = useRef(new Set<number>())
+  const revealPointers = useRef(new Set<number>())
+  const [revealing, setRevealing] = useState(false)
+  const idleKey = [activity, connected, hosting, locked, keyboard, reading, copying, video.playing, message].join(':')
+  const keepControls = !connected || !video.playing || keyboard || reading || copying || pressing
+  const controlsShown = !revealing && (keepControls || hiddenAt !== idleKey)
+  const noteActivity = () => setActivity((value) => value + 1)
+
+  useEffect(() => {
+    if (hideControls || keepControls) return
+    const timer = window.setTimeout(() => {
+      // Keyboard/assistive-technology users must not lose the control they are using.
+      const focused = document.activeElement
+      if (focused && stage.current?.contains(focused) && focused.matches(':focus-visible')) return
+      setHiddenAt(idleKey)
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [hideControls, keepControls, idleKey])
+
+  useEffect(() => {
+    // A press can end outside the stage. Never hide half-way through a remote drag
+    // or multi-touch gesture, and start a fresh idle interval after its last finger.
+    const release = (event: PointerEvent) => {
+      if (!pointers.current.delete(event.pointerId)) return
+      setPressing(pointers.current.size > 0)
+      setActivity((value) => value + 1)
+    }
+    const cancel = () => {
+      pointers.current.clear()
+      revealPointers.current.clear()
+      setPressing(false)
+      setRevealing(false)
+      setActivity((value) => value + 1)
+    }
+    window.addEventListener('blur', cancel)
+    window.addEventListener('pointerup', release, true)
+    window.addEventListener('pointercancel', release, true)
+    return () => {
+      window.removeEventListener('blur', cancel)
+      window.removeEventListener('pointerup', release, true)
+      window.removeEventListener('pointercancel', release, true)
+    }
+  }, [])
 
   useEffect(() => {
     mounted.current = true
@@ -187,7 +234,23 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
 
   return (
     <IconContext.Provider value={{ weight: 'regular' }}>
-      <div className="relative h-full min-h-0 bg-black" data-testid="phone-stage">
+      <div
+        ref={stage}
+        className="relative h-full min-h-0 bg-black"
+        data-testid="phone-stage"
+        onPointerDownCapture={(event) => {
+          if (!controlsShown) return
+          pointers.current.add(event.pointerId)
+          setPressing(true)
+          noteActivity()
+        }}
+        onPointerMoveCapture={() => {
+          if (controlsShown && !pressing) noteActivity()
+        }}
+        onKeyDownCapture={() => controlsShown && noteActivity()}
+        onFocusCapture={() => controlsShown && noteActivity()}
+        onBlurCapture={() => controlsShown && noteActivity()}
+      >
         <div
           ref={area}
           className="absolute inset-0 overflow-hidden"
@@ -198,7 +261,7 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
         >
           <Player transport={client.transport} />
         </div>
-        {!hideControls && (
+        {!hideControls && controlsShown && (
           <>
             <div className="pointer-events-none absolute inset-x-3 top-[max(12px,env(safe-area-inset-top))] flex items-center justify-between gap-3">
               <div className={pill}>
@@ -215,10 +278,6 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
                 >
                   {hosting ? <HandPalmIcon className="size-6" /> : <CursorIcon className="size-6" />}
                 </IconButton>
-              </div>
-              <div className="flex min-w-0 items-center gap-2 rounded-full border border-white/15 bg-black/80 px-4 py-3 text-sm leading-5 text-white backdrop-blur-xl">
-                <MonitorIcon className="size-4 shrink-0" />
-                <span className="truncate">{t('phone.remote_browser')}</span>
               </div>
               <div className={pill}>
                 <IconButton
@@ -293,7 +352,33 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
             )}
           </>
         )}
-        {video.playable && (!video.playing || (video.muted && video.mutedByAutoplay)) && (
+        {!hideControls && !controlsShown && (
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full touch-none bg-transparent"
+            aria-label={t('phone.show_controls')}
+            data-testid="phone-reveal"
+            onPointerDown={(event) => {
+              revealPointers.current.add(event.pointerId)
+              setRevealing(true)
+            }}
+            onPointerUp={(event) => revealPointers.current.delete(event.pointerId)}
+            onPointerCancel={(event) => {
+              revealPointers.current.delete(event.pointerId)
+              if (!revealPointers.current.size) setRevealing(false)
+            }}
+            onClick={(event) => {
+              // Keep this sibling shield mounted for the complete tap sequence.
+              // Revealing on pointerdown would expose the remote to its release/click.
+              event.preventDefault()
+              event.stopPropagation()
+              if (revealPointers.current.size) return
+              setRevealing(false)
+              noteActivity()
+            }}
+          />
+        )}
+        {video.playable && (!video.playing || (controlsShown && video.muted && video.mutedByAutoplay)) && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <button
               type="button"

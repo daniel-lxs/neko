@@ -309,3 +309,5 @@ five-second reconnect grace. A deliberate permanent screen change cancels the te
 Other viewers see this shared desktop; non-admin phones cannot resize it. Keyboard opening and
 pinch zoom do not resize the remote. Moving out of phone layout while retaining control keeps the
 current resolution until control is released or the session disconnects.
+
+Phone controls hide after three seconds without interaction. A tap on the hidden viewer reveals them and is consumed locally; the next tap can interact with the remote. The redundant remote-browser label is removed. Controls stay available while a gesture, keyboard, clipboard action or keyboard-focused button is in use. Desktop layout and temporary resolution restoration are unchanged.

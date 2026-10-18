@@ -39,7 +39,7 @@
     "copy": "Copy selection",
     "copied": "Selection copied",
     "copy_failed": "Could not copy the selection. Select text and try again.",
-    "remote_browser": "Remote browser",
+    "show_controls": "Show controls",
     "reload": "Reload remote page",
     "back": "Back",
     "forward": "Forward",
