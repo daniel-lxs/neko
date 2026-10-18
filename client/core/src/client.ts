@@ -91,6 +91,9 @@ export class NekoClient {
   private staleTimer = 0
   private lastMessage = 0
   private resume = false // playback was running when the socket was lost: pick it up on the new stream
+  // Desktop clients may sync unsolicited updates; phone controls copy only on an explicit tap.
+  syncClipboard = true
+  private copyingToClipboard = false
   private clipboardAt = 0 // when the remote clipboard last changed
   private localSeen = { text: '', at: 0 } // the local clipboard text last handed over, and when
 
@@ -431,7 +434,9 @@ export class NekoClient {
       case 'clipboard/updated':
         this.patch('control', { clipboard: { text: p.text } })
         this.clipboardAt = Date.now()
-        navigator.clipboard?.writeText(p.text).catch(() => {}) // only over https
+        // An explicit promised ClipboardItem owns the write until it settles. A second
+        // background write would cancel it in Safari. Desktop sync otherwise stays unchanged.
+        if (this.syncClipboard && !this.copyingToClipboard) navigator.clipboard?.writeText(p.text).catch(() => {})
         events.emit('room.clipboard.updated', p.text)
         break
       case 'broadcast/status':
@@ -485,6 +490,73 @@ export class NekoClient {
   // types text remotely via the server's clipboard
   paste(text: string) {
     this.send('control/paste', { text })
+  }
+
+  // Copy the actual remote selection, not the cached clipboard. Begin the native write
+  // within the caller's click; ClipboardItem accepts data that arrives asynchronously.
+  async copySelectionToClipboard(signal?: AbortSignal) {
+    if (this.copyingToClipboard) throw new Error('A clipboard copy is already pending')
+    if (
+      !this.connected ||
+      !this.controlling ||
+      this.state.control.locked ||
+      this.privateModeEnabled ||
+      !this.session?.profile.can_host ||
+      !this.session.profile.can_access_clipboard ||
+      signal?.aborted
+    )
+      throw new Error('Copy requires control and clipboard access')
+    if (
+      !globalThis.isSecureContext ||
+      typeof navigator.clipboard?.write !== 'function' ||
+      typeof ClipboardItem === 'undefined'
+    )
+      throw new Error('Clipboard writing is unavailable')
+
+    this.copyingToClipboard = true
+    const dispose: (() => void)[] = []
+    let rejectSelection: (reason: Error) => void = () => {}
+    const selection = new Promise<Blob>((resolve, reject) => {
+      rejectSelection = reject
+      const timeout = setTimeout(() => reject(new Error('No copied selection received')), 3000)
+      dispose.push(() => clearTimeout(timeout))
+      dispose.push(
+        this.events.on('room.clipboard.updated', (text) => {
+          if (!text) reject(new Error('The copied selection has no text'))
+          else resolve(new Blob([text], { type: 'text/plain' }))
+        }),
+      )
+      dispose.push(
+        this.store.subscribe(
+          (s) =>
+            [
+              s.session_id,
+              s.control.host_id,
+              s.connection.status,
+              s.control.locked,
+              selectSession(s)?.profile.can_host,
+              selectSession(s)?.profile.can_access_clipboard,
+              s.settings.private_mode,
+              selectIsAdmin(s),
+            ].join('|'),
+          () => reject(new Error('Control or clipboard access changed')),
+        ),
+      )
+      const abort = () => reject(new Error('Copy cancelled'))
+      signal?.addEventListener('abort', abort, { once: true })
+      dispose.push(() => signal?.removeEventListener('abort', abort))
+    })
+    // If the browser rejects the write before consuming its item, still handle cancellation.
+    void selection.catch(() => {})
+    try {
+      const write = navigator.clipboard.write([new ClipboardItem({ 'text/plain': selection })])
+      this.send('control/copy')
+      await write
+    } finally {
+      rejectSelection(new Error('Copy finished'))
+      dispose.forEach((fn) => fn())
+      this.copyingToClipboard = false
+    }
   }
 
   // Before a paste keystroke, with the text the browser's own paste event handed over: the side

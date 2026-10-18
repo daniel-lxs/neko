@@ -288,11 +288,18 @@ steps in a real Chromium-based browser instead of Playwright's, start it with
 
 ### Phone viewer
 
-Coarse-pointer phone viewports use a full-height player and large Control, Paste and Keyboard
-buttons, without the desktop header or sidebar. Desktop pointer layouts keep the existing UI.
-Paste reads text through the Clipboard API during the button gesture; deployed sites need HTTPS,
-and Safari may show its native Paste confirmation. No manual clipboard box is shown on phones.
-Pending reads are cancelled when control, session or permissions change.
+Coarse-pointer phone viewports use a full-height player with compact floating controls (44px
+icon targets), without the desktop header or sidebar. Control and reload sit at the top;
+back/forward sit at the bottom left, and Keyboard, Copy, Paste at the bottom right. Tapping the
+screen requests control. Desktop pointer layouts keep the existing UI.
+
+Copy sends Ctrl+C to the remote application, waits for a fresh clipboard update, then writes that
+selected text to the phone clipboard. It does not return the cached remote clipboard on timeout.
+The native write starts within the button gesture using a promised ClipboardItem, which Safari
+supports. Unsolicited clipboard updates do not overwrite the phone clipboard. Paste reads text
+through the Clipboard API during the button gesture; deployed sites need HTTPS, and Safari may
+show its native Paste confirmation. No manual clipboard box is shown on phones. Pending clipboard
+operations are cancelled when control, session or permissions change, or the phone view unmounts.
 
 While an admin controls from a phone, the viewer fits the remote desktop to its available aspect
 ratio at a minimum width of 512 pixels (Chromium windows require at least 500). The server owns
