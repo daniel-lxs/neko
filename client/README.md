@@ -327,3 +327,15 @@ reveals them and is consumed locally; the next tap can interact with the remote.
 remain available while controls are hidden. Desktop layout and automatic sign-in are unchanged.
 The earlier temporary-resolution server endpoint remains compatible with older clients, but
 this phone viewer never calls it.
+
+## Chat disabled in this fork's images
+
+The runtime Dockerfiles set neko's supported `NEKO_CHAT_ENABLED=false` (CLI:
+`--chat.enabled=false`). This disables sending and receiving on the server, including
+admin HTTP sends and WebSocket messages, without disabling file transfer.
+
+The viewer honors `chat/init.enabled`: until explicitly enabled, Chat is absent from
+both the touch viewer's More menu and the desktop panel, along with chat sound/link
+settings and chat moderation actions. Saved Chat tabs fall back to an available tab.
+Disconnecting clears chat capability and unread state. The plugin remains available
+in source; explicitly overriding the server switch to true enables it again.

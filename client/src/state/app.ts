@@ -38,9 +38,11 @@ export function createAppStore() {
     // the touch viewer shows the side panel as a full-screen sheet, closed at start
     sheet: false,
     // id of the side panel's tab (a plugin's or 'settings')
-    tab: get<string>('tab', 'chat'),
+    tab: get<string>('tab', 'files'),
     // openinapp/init: links can be opened on the remote desktop
     openInApp: false,
+    // Server chat/init capability; hidden until explicitly enabled.
+    chatEnabled: false,
     emotes: {} as Record<string, string>,
     ignored: {} as Record<string, boolean>,
     broadcast: { active: false, url: '' },

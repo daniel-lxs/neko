@@ -33,9 +33,10 @@ export function Chat() {
   const sessions = useStore(client.store, (s) => s.sessions)
   const muted = useStore(client.store, selectMuted)
   const store = chat(neko)
-  const { lines, enabled } = useStore(
+  const enabled = useStore(neko.app, (s) => s.chatEnabled)
+  const { lines } = useStore(
     store,
-    useShallow((s) => ({ lines: s.lines, enabled: s.enabled })),
+    useShallow((s) => ({ lines: s.lines })),
   )
   const [text, setText] = useState('')
   const [picker, setPicker] = useState(false)

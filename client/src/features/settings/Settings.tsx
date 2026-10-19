@@ -33,6 +33,7 @@ export function Settings() {
       keyboardLayouts: a.keyboardLayouts,
     })),
   )
+  const chatEnabled = useStore(app, (s) => s.chatEnabled)
   const admin = useStore(client.store, selectIsAdmin)
   const [url, setUrl] = useState(broadcast.url)
   useEffect(() => setUrl(broadcast.url), [broadcast.url])
@@ -78,8 +79,8 @@ export function Settings() {
         {toggle('scroll_invert', 'scroll_invert')}
         {toggle('autoplay', 'autoplay')}
         {toggle('ignore_emotes', 'ignore_emotes')}
-        {toggle('chat_sound', 'chat_sound')}
-        {openInApp && toggle('links_in_app', 'links_in_app')}
+        {chatEnabled && toggle('chat_sound', 'chat_sound')}
+        {chatEnabled && openInApp && toggle('links_in_app', 'links_in_app')}
         <li className={row}>
           <span className={label}>{t('setting.keyboard_layout')}</span>
           <label className="max-w-[120px] text-right">

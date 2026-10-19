@@ -10,6 +10,8 @@ import { Chat } from './Chat'
 import { chat as store, push } from './store'
 import { mute, mutedByMe } from './actions'
 
+const useChatEnabled = () => useStore(useNeko().app, (s) => s.chatEnabled)
+
 export const chat: Plugin = {
   id: 'chat',
   ns: 'chat',
@@ -18,12 +20,17 @@ export const chat: Plugin = {
     icon: ChatIcon,
     label: 'chat:tab',
     component: Chat,
+    useVisible: useChatEnabled,
     useBadge: () => useStore(store(useNeko()), (s) => s.texts),
   },
   memberMenu: [
     {
       id: 'chat-mute',
-      useVisible: () => useStore(useClient().store, selectIsAdmin),
+      useVisible: () => {
+        const admin = useStore(useClient().store, selectIsAdmin)
+        const enabled = useChatEnabled()
+        return admin && enabled
+      },
       label: ({ client }, m) => t(isMuted(client, m.id) ? 'chat:unmute' : 'chat:mute'),
       onClick(neko, m) {
         const muted = isMuted(neko.client, m.id)
@@ -38,8 +45,12 @@ export const chat: Plugin = {
   ],
   onEvent(neko, ...[event, payload]) {
     const { client, app } = neko
-    if (event === 'chat/init') store(neko).setState({ enabled: payload.enabled })
+    if (event === 'chat/init') {
+      app.setState({ chatEnabled: payload.enabled })
+      if (!payload.enabled) store(neko).setState({ lines: [], texts: 0 })
+    }
     if (event === 'chat/message') {
+      if (!app.getState().chatEnabled) return
       if (app.getState().ignored[payload.id]) return
       push(store(neko), {
         id: payload.id,
@@ -57,8 +68,15 @@ export const chat: Plugin = {
     const { client, bus } = neko
     const lines = store(neko)
     // the room's event lines ("bob took the controls") are shown in the chat
-    bus.on('log', (id, name, content) => push(lines, { id, name, type: 'event', content, created: new Date() }))
-    bus.on('logout', () => lines.setState({ lines: [], texts: 0 }))
+    bus.on('log', (id, name, content) => {
+      if (neko.app.getState().chatEnabled) push(lines, { id, name, type: 'event', content, created: new Date() })
+    })
+    const reset = () => {
+      neko.app.setState({ chatEnabled: false })
+      lines.setState({ lines: [], texts: 0 })
+    }
+    bus.on('logout', reset)
+    client.events.on('connection.closed', reset)
 
     // muted / unmuted lines: who may send, per session; a change after the member list is known
     // is someone's mute (ours when mutedByMe says so, the server does not say)
@@ -74,7 +92,7 @@ export const chat: Plugin = {
       },
     )
     const onSession = (id: string) => {
-      if (!initialized) return
+      if (!initialized || !neko.app.getState().chatEnabled) return
       const now = can(id)
       if (id in canSend && canSend[id] !== now) {
         const by = mutedByMe(neko).delete(id) ? t('you') : t('somebody')

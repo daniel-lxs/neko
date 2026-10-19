@@ -15,8 +15,6 @@ export const createChatStore = () =>
     lines: [] as ChatLine[],
     // messages received, for the unread badge
     texts: 0,
-    // chat/init: the server's chat plugin is on
-    enabled: true,
     emojiReady: false,
     emojiRecent: [] as string[],
   }))

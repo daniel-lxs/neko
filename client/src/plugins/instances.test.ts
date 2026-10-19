@@ -43,6 +43,7 @@ test('a plugin store is per instance: a server event of one fills its store only
   assert.notEqual(files(a), files(b))
   assert.notEqual(mutedByMe(a), mutedByMe(b))
 
+  a.client.events.emit('message', 'chat/init', { enabled: true })
   a.client.events.emit('message', 'chat/message', message('s1', 'hi'))
   assert.deepEqual(
     chat(a)
@@ -75,4 +76,23 @@ test("a plugin's wiring is per instance: the bus lines and the logout of one", (
   a.bus.emit('logout')
   assert.deepEqual([chat(a).getState().lines, files(a).getState().uploads], [[], []])
   assert.equal(files(b).getState().uploads.length, 1)
+})
+
+test('disabled chat drops messages and logs and clears unread state', () => {
+  const n = createNekoApp({ transport: fakeTransport() })
+  initPlugins(n)
+  const send = () => n.client.events.emit('message', 'chat/message', message('s1', 'hidden'))
+  send()
+  assert.equal(chat(n).getState().texts, 0)
+  n.client.events.emit('message', 'chat/init', { enabled: true })
+  send()
+  assert.equal(chat(n).getState().texts, 1)
+  n.client.events.emit('message', 'chat/init', { enabled: false })
+  send()
+  n.bus.emit('log', 'bob', 'Bob', 'connected')
+  assert.deepEqual(chat(n).getState().lines, [])
+  assert.equal(chat(n).getState().texts, 0)
+  n.client.events.emit('message', 'chat/init', { enabled: true })
+  n.bus.emit('logout')
+  assert.equal(n.app.getState().chatEnabled, false)
 })

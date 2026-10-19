@@ -108,6 +108,8 @@ ENV PULSE_SERVER=unix:/tmp/pulseaudio.socket
 ENV XDG_RUNTIME_DIR=/tmp/runtime-$USERNAME
 ENV NEKO_SERVER_BIND=:8080
 ENV NEKO_PLUGINS_ENABLED=true
+# Disable chat with neko's supported switch; keep file transfer enabled.
+ENV NEKO_CHAT_ENABLED=false
 ENV NEKO_PLUGINS_DIR=/etc/neko/plugins/
 
 #
