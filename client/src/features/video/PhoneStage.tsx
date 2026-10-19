@@ -21,6 +21,7 @@ import { useNeko } from '@/state/provider'
 import { useActions } from '@/state/actions'
 import { cn } from '@/lib/utils'
 import { IconButton } from '@/components/IconButton'
+import { canReadClipboardText, readClipboardText } from '@/lib/clipboard'
 import { PhonePlayer } from './PhonePlayer'
 
 const control =
@@ -125,7 +126,7 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
 
   const paste = async () => {
     if (!client.controlling || client.state.control.locked || reading) return
-    if (!window.isSecureContext || typeof navigator.clipboard?.readText !== 'function') {
+    if (!canReadClipboardText()) {
       setMessage(t('phone.clipboard_unavailable'))
       return
     }
@@ -135,7 +136,7 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
     try {
       // Start inside this click's user activation. Safari may ask the user to confirm Paste.
       // Do not focus the input overlay or use the background clipboard-sync path here.
-      const text = await navigator.clipboard.readText()
+      const text = await readClipboardText()
       if (!mounted.current) return
       if (
         !client.connected ||
