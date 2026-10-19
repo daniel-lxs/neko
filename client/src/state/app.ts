@@ -35,6 +35,8 @@ export function createAppStore() {
   return createStore(() => ({
     settings: load(),
     side: params.has('show_side') ? params.get('show_side') === '1' : get('side', false),
+    // the touch viewer shows the side panel as a full-screen sheet, closed at start
+    sheet: false,
     // id of the side panel's tab (a plugin's or 'settings')
     tab: get<string>('tab', 'chat'),
     // openinapp/init: links can be opened on the remote desktop

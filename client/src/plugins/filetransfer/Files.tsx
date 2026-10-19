@@ -160,6 +160,7 @@ export function Files() {
               {/* native download: the browser's download manager shows progress */}
               {!selecting && item.type !== 'dir' && canDownload && (
                 <a
+                  className="pointer-coarse:-m-2.5 pointer-coarse:p-2.5"
                   href={fileUrl(neko, item.name)}
                   download={item.name}
                   aria-label={`Download ${item.name}`}
@@ -171,7 +172,7 @@ export function Files() {
               {!selecting && item.type !== 'dir' && canDelete && (
                 <IconButton
                   label={`${t('files:delete')} ${item.name}`}
-                  className="ml-2"
+                  className="ml-2 pointer-coarse:-my-2.5 pointer-coarse:ml-5 pointer-coarse:p-2.5"
                   data-testid="file-delete"
                   onClick={() => deleteOne(item.name)}
                 >

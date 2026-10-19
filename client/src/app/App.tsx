@@ -11,7 +11,7 @@ import logo from '@/assets/images/logo.svg'
 import { Dialog } from '@/components/Dialog'
 import { Toaster } from '@/components/ui/sonner'
 import { Header } from '@/layout/Header'
-import { Side } from '@/layout/Side'
+import { Side, SideSheet } from '@/layout/Side'
 import { RoomBar } from '@/layout/RoomBar'
 import { Stage } from '@/features/video/Stage'
 import { MemberMenu } from '@/features/members/MemberMenu'
@@ -27,9 +27,9 @@ export function App() {
   const { client, app } = useNeko()
   const { phone, viewport } = usePhoneLayout()
   const connected = useStore(client.store, (s) => s.connection.status === 'connected')
-  const { side, about } = useStore(
+  const { side, sheet, about } = useStore(
     app,
-    useShallow((s) => ({ side: s.side, about: s.about })),
+    useShallow((s) => ({ side: s.side, sheet: s.sheet, about: s.about })),
   )
   const memberMenu = useSlot('member.menu')
 
@@ -87,6 +87,7 @@ export function App() {
         </main>
         {!phone && !videoOnly && <MemberMenu items={memberMenu} />}
         {expanded && <Side />}
+        {phone && !videoOnly && sheet && <SideSheet />}
         {!connected && <Connect />}
         {!videoOnly && <Toaster />}
         {about && <About />}

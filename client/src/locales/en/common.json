@@ -41,6 +41,8 @@
     "copy_failed": "Could not copy the selection. Select text and try again.",
     "show_controls": "Show controls",
     "reload": "Reload remote page",
+    "panel": "Files, chat and settings",
+    "panel_close": "Close panel",
     "back": "Back",
     "forward": "Forward",
     "play": "Play",
