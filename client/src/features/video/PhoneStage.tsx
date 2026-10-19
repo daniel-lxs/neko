@@ -15,6 +15,7 @@ import {
   CaretRightIcon,
   PlayIcon,
   SpeakerHighIcon,
+  SidebarSimpleIcon,
 } from '@phosphor-icons/react'
 import { useNeko } from '@/state/provider'
 import { useActions } from '@/state/actions'
@@ -28,7 +29,7 @@ const pill = 'pointer-events-auto flex rounded-full border border-white/15 bg-bl
 
 export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const { t } = useTranslation()
-  const { client, overlay } = useNeko()
+  const { client, overlay, app } = useNeko()
   const actions = useActions()
   const { hosting, allowed, clipboardAllowed, locked, keyboard, connected, video } = useStore(
     client.store,
@@ -242,6 +243,14 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
                   onClick={() => shortcut(0xffc2)}
                 >
                   <ArrowClockwiseIcon className="size-6" />
+                </IconButton>
+                <IconButton
+                  label={t('phone.panel')}
+                  className={control}
+                  data-testid="phone-panel"
+                  onClick={() => app.setState({ sheet: true })}
+                >
+                  <SidebarSimpleIcon className="size-6" />
                 </IconButton>
               </div>
             </div>
