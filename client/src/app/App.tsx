@@ -11,7 +11,7 @@ import logo from '@/assets/images/logo.svg'
 import { Dialog } from '@/components/Dialog'
 import { Toaster } from '@/components/ui/sonner'
 import { Header } from '@/layout/Header'
-import { Side, SideSheet } from '@/layout/Side'
+import { Side, SideSheet, settingsTab } from '@/layout/Side'
 import { RoomBar } from '@/layout/RoomBar'
 import { Stage } from '@/features/video/Stage'
 import { MemberMenu } from '@/features/members/MemberMenu'
@@ -32,6 +32,7 @@ export function App() {
     useShallow((s) => ({ side: s.side, sheet: s.sheet, about: s.about })),
   )
   const memberMenu = useSlot('member.menu')
+  const tabs = [...useSlot('side.tab'), settingsTab]
 
   if (!WebRTCTransport.supported()) {
     return (
@@ -81,7 +82,7 @@ export function App() {
           )}
           {/* .video-container: index.html sizes it before the app renders (iOS) */}
           <div className={phone ? 'relative min-h-0 flex-1' : 'video-container flex max-w-full grow bg-black/40'}>
-            <Stage phone={phone} hideControls={cast} extraControls={videoOnly} />
+            <Stage phone={phone} hideControls={cast} extraControls={videoOnly} tabs={tabs} />
           </div>
           {!phone && !videoOnly && <RoomBar />}
         </main>

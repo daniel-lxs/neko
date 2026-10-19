@@ -13,7 +13,7 @@ import { IconButton } from '@/components/IconButton'
 import { Dialog, DialogPortal, DialogOverlay, DialogContent, DialogTitle } from '@/components/ui/dialog'
 
 // after the plugins' tabs
-const settingsTab: PluginTab = {
+export const settingsTab: PluginTab = {
   id: 'settings',
   icon: SlidersHorizontalIcon,
   label: 'side.settings',
@@ -36,7 +36,7 @@ export function Side({ sheet = false }: { sheet?: boolean }) {
 }
 
 // the touch viewer's way to the same panel (files, chat, settings): over the whole screen, opened
-// from its controls
+// on a tab from its More menu
 export function SideSheet() {
   const { t } = useTranslation()
   const app = useApp()
@@ -53,7 +53,7 @@ export function SideSheet() {
           <DialogTitle className="sr-only">{t('phone.panel')}</DialogTitle>
           <div className="flex justify-end px-3 pt-2">
             <IconButton label={t('phone.panel_close')} className="size-11 rounded-full text-white" onClick={close}>
-              <XIcon className="size-6" />
+              <XIcon className="size-6" weight="bold" />
             </IconButton>
           </div>
           <div className="min-h-0 flex-1">

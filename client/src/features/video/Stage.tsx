@@ -14,6 +14,7 @@ import {
   SpeakerHighIcon,
 } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
+import type { PluginTab } from '@/plugins/types'
 import { useActions } from '@/state/actions'
 import { useNeko } from '@/state/provider'
 import { IconButton } from '@/components/IconButton'
@@ -32,8 +33,18 @@ import { usePip } from './usePip'
 const overlayClasses =
   'absolute inset-0 flex cursor-pointer items-center justify-center overflow-hidden rounded-none bg-black/20'
 
-export function Stage({ phone = false, ...props }: { phone?: boolean; hideControls: boolean; extraControls: boolean }) {
-  return phone ? <PhoneStage hideControls={props.hideControls} /> : <DesktopStage {...props} />
+// `tabs`: the side panel's, which the touch viewer opens from its More menu
+export function Stage({
+  phone = false,
+  tabs,
+  ...props
+}: {
+  phone?: boolean
+  hideControls: boolean
+  extraControls: boolean
+  tabs: readonly PluginTab[]
+}) {
+  return phone ? <PhoneStage hideControls={props.hideControls} tabs={tabs} /> : <DesktopStage {...props} />
 }
 
 function DesktopStage({ hideControls, extraControls }: { hideControls: boolean; extraControls: boolean }) {

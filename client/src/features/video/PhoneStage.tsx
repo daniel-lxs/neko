@@ -15,20 +15,30 @@ import {
   CaretRightIcon,
   PlayIcon,
   SpeakerHighIcon,
-  SidebarSimpleIcon,
+  DotsThreeIcon,
+  ArrowsCounterClockwiseIcon,
 } from '@phosphor-icons/react'
 import { useNeko } from '@/state/provider'
 import { useActions } from '@/state/actions'
 import { cn } from '@/lib/utils'
 import { IconButton } from '@/components/IconButton'
+import { EachHook } from '@/components/EachHook'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { remember } from '@/state/storage'
+import type { PluginTab } from '@/plugins/types'
 import { canReadClipboardText, readClipboardText } from '@/lib/clipboard'
 import { PhonePlayer } from './PhonePlayer'
 
 const control =
   'size-11 shrink-0 rounded-full text-white transition-colors hover:bg-white/10 active:bg-white/20 disabled:opacity-35 disabled:cursor-default'
+// a More menu entry, as tall as the controls
+const item =
+  'flex min-h-11 items-center gap-3 rounded-xl px-3 text-base data-disabled:cursor-default data-disabled:opacity-35 data-highlighted:bg-white/10 data-highlighted:text-white'
 const pill = 'pointer-events-auto flex rounded-full border border-white/15 bg-black/80 p-1 shadow-lg backdrop-blur-xl'
 
-export function PhoneStage({ hideControls }: { hideControls: boolean }) {
+const always = () => true
+
+export function PhoneStage({ hideControls, tabs }: { hideControls: boolean; tabs: readonly PluginTab[] }) {
   const { t } = useTranslation()
   const { client, overlay, app } = useNeko()
   const actions = useActions()
@@ -48,6 +58,7 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const [message, setMessage] = useState('')
   const [reading, setReading] = useState(false)
   const [copying, setCopying] = useState(false)
+  const [menu, setMenu] = useState(false)
   const copyAbort = useRef<AbortController | null>(null)
   const pasteGeneration = useRef(0)
   const mounted = useRef(false)
@@ -56,8 +67,10 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
   const [hiddenAt, setHiddenAt] = useState('')
   const [pressing, setPressing] = useState(false)
   const pointers = useRef(new Set<number>())
-  const idleKey = [activity, connected, hosting, locked, keyboard, reading, copying, video.playing, message].join(':')
-  const keepControls = !connected || !video.playing || keyboard || reading || copying || pressing
+  const idleKey = [activity, connected, hosting, locked, keyboard, reading, copying, menu, video.playing, message].join(
+    ':',
+  )
+  const keepControls = !connected || !video.playing || keyboard || reading || copying || pressing || menu
   const controlsShown = keepControls || hiddenAt !== idleKey
   const noteActivity = () => setActivity((value) => value + 1)
 
@@ -237,22 +250,62 @@ export function PhoneStage({ hideControls }: { hideControls: boolean }) {
                 </IconButton>
               </div>
               <div className={pill}>
-                <IconButton
-                  label={t('phone.reload')}
-                  className={control}
-                  disabled={!active}
-                  onClick={() => shortcut(0xffc2)}
-                >
-                  <ArrowClockwiseIcon className="size-6" />
-                </IconButton>
-                <IconButton
-                  label={t('phone.panel')}
-                  className={control}
-                  data-testid="phone-panel"
-                  onClick={() => app.setState({ sheet: true })}
-                >
-                  <SidebarSimpleIcon className="size-6" />
-                </IconButton>
+                {/* Reload and the side panel's tabs (files, chat, settings) behind one button */}
+                <DropdownMenu open={menu} onOpenChange={setMenu}>
+                  <DropdownMenuTrigger asChild>
+                    <IconButton
+                      label={t('phone.more')}
+                      className={cn(control, menu && 'bg-white/15')}
+                      data-testid="phone-more"
+                    >
+                      <DotsThreeIcon className="size-6" weight="bold" />
+                    </IconButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={8}
+                    className="min-w-56 rounded-2xl border border-white/15 bg-black/90 p-1.5 text-white backdrop-blur-xl"
+                    data-testid="phone-menu"
+                  >
+                    <DropdownMenuItem
+                      className={item}
+                      disabled={!active}
+                      data-testid="phone-menu-reload"
+                      onSelect={() => shortcut(0xffc2)}
+                    >
+                      <ArrowClockwiseIcon className="size-5" />
+                      {t('phone.reload')}
+                    </DropdownMenuItem>
+                    <EachHook items={tabs} use={(tab) => tab.useVisible ?? always}>
+                      {(visible) =>
+                        tabs
+                          .filter((_, i) => visible[i])
+                          .map(({ id, icon: Icon, label }) => (
+                            <DropdownMenuItem
+                              key={id}
+                              className={item}
+                              data-testid={`phone-menu-${id}`}
+                              onSelect={() => {
+                                app.setState({ tab: id, sheet: true })
+                                remember('tab', id)
+                              }}
+                            >
+                              <Icon className="size-5" />
+                              {t(label)}
+                            </DropdownMenuItem>
+                          ))
+                      }
+                    </EachHook>
+                    <DropdownMenuItem
+                      className={item}
+                      data-testid="phone-menu-viewer"
+                      onSelect={() => location.reload()}
+                    >
+                      <ArrowsCounterClockwiseIcon className="size-5" />
+                      {t('phone.reload_viewer')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
             <div
