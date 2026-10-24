@@ -1,6 +1,10 @@
 ARG BASE_IMAGE=ghcr.io/m1k1o/neko/base:latest
 FROM $BASE_IMAGE
 
+# Oldest Chromium the image may ship: the build fails if Debian's package is older.
+# 156.0.8078.47 fixes the Black October Chromium bugs (Debian trixie-security, 2026-10).
+ARG CHROMIUM_MIN_VERSION=156.0.8078.47
+
 COPY ./widevinecdm.sh /widevine.sh
 
 #
@@ -8,6 +12,7 @@ COPY ./widevinecdm.sh /widevine.sh
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends chromium chromium-common chromium-sandbox openbox; \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' chromium)" ge "${CHROMIUM_MIN_VERSION}"; \
     #
     # install widevine module (only for amd64)
     CHROMIUM_DIR="/usr/lib/chromium"; \
