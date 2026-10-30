@@ -2,8 +2,9 @@ ARG BASE_IMAGE=ghcr.io/m1k1o/neko/base:latest
 FROM $BASE_IMAGE
 
 # Oldest Chromium the image may ship: the build fails if Debian's package is older.
-# 156.0.8078.47 fixes the Black October Chromium bugs (Debian trixie-security, 2026-10).
-ARG CHROMIUM_MIN_VERSION=156.0.8078.47
+# 156.0.8078.47 fixes the Black October Chromium bugs; 156.0.8078.73 is the newest in Debian
+# trixie-security (2026-10-30, Google's .79 is not in Debian yet).
+ARG CHROMIUM_MIN_VERSION=156.0.8078.73
 
 COPY ./widevinecdm.sh /widevine.sh
 
