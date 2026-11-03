@@ -304,10 +304,17 @@ operations are cancelled when control, session or permissions change, or the pho
 Phone viewers keep the shared desktop at its configured size (for example, 1280×720).
 The stream starts fitted. Pinch to zoom the image up to 6×; drag to pan it when zoomed.
 At the fitted size, a completed single-finger swipe scrolls the remote page. Pinch and
-pan stay local and never change the browser page zoom or send a remote drag. A completed tap
+pan stay local and never change the browser page zoom. A completed tap
 maps through the rendered image bounds to a remote mouse click and shows a local ripple.
-Letterbox taps do not click the desktop. A pinch, cancelled gesture, long press or ownership
-change cancels its pending tap. The keyboard still uses the existing input overlay.
+Letterbox taps do not click the desktop. A pinch, cancelled gesture or ownership
+change cancels its pending tap.
+
+Press and hold (450 ms, without moving) presses the remote left button where the finger is,
+shown by a ring under it; moving then drags (sliders, text selection, maps, drag and drop) and
+lifting the finger releases the button. The drag may leave the image; it stops at its edge. Other
+fingers are ignored until it ends. Losing control, the window or the pointer releases the button.
+A hold follows the tap rules: while the controls are hidden it only reveals them, and without
+control it asks for control. The keyboard still uses the existing input overlay.
 
 The Keyboard button opens the local software keyboard. Stream gestures preserve that input's
 focus while it is open; the button and Safari's Done action can still dismiss it. Text input
@@ -327,6 +334,14 @@ reveals them and is consumed locally; the next tap can interact with the remote.
 remain available while controls are hidden. Desktop layout and automatic sign-in are unchanged.
 The earlier temporary-resolution server endpoint remains compatible with older clients, but
 this phone viewer never calls it.
+
+### Back link
+
+`?back=<url>` shows a Back link (the header on desktops, an arrow at the top left of the touch
+viewer) to where the viewer was opened from, such as a list of several neko servers behind one
+origin. Only a page of the viewer's own origin is accepted (relative paths included); other sites,
+`javascript:` and `data:` URLs give no link. The parameter stays in the address, so a reload keeps
+it.
 
 ## Chat disabled in this fork's images
 

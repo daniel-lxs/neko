@@ -17,10 +17,12 @@ import {
   SpeakerHighIcon,
   DotsThreeIcon,
   ArrowsCounterClockwiseIcon,
+  ArrowLeftIcon,
 } from '@phosphor-icons/react'
 import { useNeko } from '@/state/provider'
 import { useActions } from '@/state/actions'
 import { cn } from '@/lib/utils'
+import { backLink } from '@/lib/back'
 import { IconButton } from '@/components/IconButton'
 import { EachHook } from '@/components/EachHook'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -37,6 +39,7 @@ const item =
 const pill = 'pointer-events-auto flex rounded-full border border-white/15 bg-black/80 p-1 shadow-lg backdrop-blur-xl'
 
 const always = () => true
+const back = backLink()
 
 export function PhoneStage({ hideControls, tabs }: { hideControls: boolean; tabs: readonly PluginTab[] }) {
   const { t } = useTranslation()
@@ -234,20 +237,35 @@ export function PhoneStage({ hideControls, tabs }: { hideControls: boolean; tabs
         {!hideControls && controlsShown && (
           <>
             <div className="pointer-events-none absolute inset-x-3 top-[max(12px,env(safe-area-inset-top))] flex items-center justify-between gap-3">
-              <div className={pill}>
-                <IconButton
-                  label={t(hosting ? (locked ? 'phone.unlock' : 'phone.release') : 'phone.take')}
-                  className={cn(control, hosting && 'bg-white/15')}
-                  disabled={!connected || !video.playable || (!hosting && !allowed)}
-                  aria-pressed={hosting}
-                  onClick={() => {
-                    setMessage('')
-                    if (hosting && locked) client.unlock()
-                    else actions.toggleControl()
-                  }}
-                >
-                  {hosting ? <HandPalmIcon className="size-6" /> : <CursorIcon className="size-6" />}
-                </IconButton>
+              <div className="flex gap-2">
+                {back && (
+                  <div className={pill}>
+                    <a
+                      href={back}
+                      aria-label={t('back_link')}
+                      title={t('back_link')}
+                      className={cn(control, 'flex items-center justify-center')}
+                      data-testid="phone-back"
+                    >
+                      <ArrowLeftIcon className="size-6" />
+                    </a>
+                  </div>
+                )}
+                <div className={pill}>
+                  <IconButton
+                    label={t(hosting ? (locked ? 'phone.unlock' : 'phone.release') : 'phone.take')}
+                    className={cn(control, hosting && 'bg-white/15')}
+                    disabled={!connected || !video.playable || (!hosting && !allowed)}
+                    aria-pressed={hosting}
+                    onClick={() => {
+                      setMessage('')
+                      if (hosting && locked) client.unlock()
+                      else actions.toggleControl()
+                    }}
+                  >
+                    {hosting ? <HandPalmIcon className="size-6" /> : <CursorIcon className="size-6" />}
+                  </IconButton>
+                </div>
               </div>
               <div className={pill}>
                 {/* Reload and the side panel's tabs (files, chat, settings) behind one button */}

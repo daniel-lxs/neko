@@ -30,6 +30,7 @@
       "button_cancel": "Cancel"
     }
   },
+  "back_link": "Back",
   "phone": {
     "take": "Take control",
     "release": "Release control",

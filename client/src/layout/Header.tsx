@@ -2,8 +2,9 @@ import { useState, type ReactNode } from 'react'
 import { useStore } from 'zustand'
 import { selectIsAdmin } from '@m1k1o/neko'
 import { useTranslation } from 'react-i18next'
-import { ListIcon, LockIcon, LockOpenIcon, MouseIcon } from '@phosphor-icons/react'
+import { ArrowLeftIcon, ListIcon, LockIcon, LockOpenIcon, MouseIcon } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
+import { backLink } from '@/lib/back'
 import { useActions } from '@/state/actions'
 import { isLocked, type LockResource } from '@/state/app'
 import { useApp, useNeko } from '@/state/provider'
@@ -14,6 +15,7 @@ import { EachHook } from '@/components/EachHook'
 import logo from '@/assets/images/logo.svg'
 
 const zero = () => 0
+const back = backLink()
 
 export function Header() {
   const { t } = useTranslation()
@@ -50,6 +52,17 @@ export function Header() {
 
   return (
     <div className="flex flex-1 flex-row items-center">
+      {back && (
+        <a
+          href={back}
+          title={back}
+          className="ml-5 flex h-8 items-center gap-1.5 rounded-md border border-white/15 px-2.5 text-sm font-semibold hover:bg-white/10"
+          data-testid="back-link"
+        >
+          <ArrowLeftIcon className="size-4" />
+          {t('back_link')}
+        </a>
+      )}
       <a
         href="https://github.com/m1k1o/neko"
         title="Github repository"

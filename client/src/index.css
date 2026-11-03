@@ -204,3 +204,8 @@
     transform: translate(-50%, -50%);
   }
 }
+/* iOS: a held finger on the phone stream drags the remote mouse; no callout or text magnifier */
+.phone-gestures {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
