@@ -1,9 +1,11 @@
 name: Publish Main Images
 
 on:
+  # by hand too (gh workflow run ghcr_main.yml), for when a push starts no run
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
