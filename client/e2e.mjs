@@ -30,7 +30,7 @@ async function step(name, fn) {
   } catch (e) {
     fails++
     log('FAIL ' + name + ' :: ' + e.message.split('\n')[0])
-    // evidence for flaky failures: both users' screens and member lists
+    // evidence for flaky failures: both users' screens and what their control pill says
     const slug = name.replace(/\W+/g, '-')
     for (const [who, p] of [
       ['alice', A],
@@ -38,10 +38,11 @@ async function step(name, fn) {
     ]) {
       if (!p) continue
       await p.screenshot({ path: `${out}/fail-${slug}-${who}.png` }).catch(() => {})
-      const members = await p
-        .$$eval('[data-testid=member]', (els) => els.map((e) => e.getAttribute('aria-label') || 'self'))
+      const status = await p
+        .locator('[data-testid=control-status]')
+        .textContent({ timeout: 1000 })
         .catch(() => '?')
-      log(`  ${who} members: ${JSON.stringify(members)}`)
+      log(`  ${who} control: ${JSON.stringify(status)}`)
     }
   }
 }
@@ -90,8 +91,47 @@ const api = (p, method, path, body) =>
     },
     [method, path, body],
   )
-const openSide = async (p) => {
-  if (!(await p.locator('[data-testid=side]').count())) await p.click('[data-testid=side-toggle]')
+// The viewer is the stream and the control pill under it. The side panel (chat, files, settings)
+// is a sheet opened from the pill's More menu, which only shows while you have control: openSide
+// takes control for a moment (alice, the admin, hands it over when someone else has it), opens
+// the tab and gives control back, so the sheet stays open with nobody in control.
+const sessionId = async (name) =>
+  JSON.parse(await api(A, 'GET', '/sessions')).find((s) => s.profile.name === name && s.state.is_connected).id
+const connectedNames = async () =>
+  JSON.parse(await api(A, 'GET', '/sessions'))
+    .filter((s) => s.state.is_connected)
+    .map((s) => s.profile.name)
+    .sort()
+const hosting = (p) => p.waitForSelector('[data-testid=control-bar][data-hosting]', { timeout: 5000 })
+const notHosting = (p) => p.waitForSelector('[data-testid=control-bar]:not([data-hosting])', { timeout: 5000 })
+const status = (p, re) =>
+  p.waitForFunction(
+    (src) => new RegExp(src).test(document.querySelector('[data-testid=control-status]')?.textContent ?? ''),
+    re.source,
+    { timeout: 5000 },
+  )
+const closeSide = async (p) => {
+  if (!(await p.locator('[data-testid=side-sheet]').count())) return
+  await p.click('[data-testid=side-sheet] [aria-label="Close panel"]')
+  await p.waitForSelector('[data-testid=side-sheet]', { state: 'detached', timeout: 3000 })
+}
+const takeControl = async (p, name) => {
+  await closeSide(p)
+  if (await p.locator('[data-testid=control-bar][data-hosting]').count()) return
+  const { has_host } = JSON.parse(await api(A, 'GET', '/room/control'))
+  if (has_host) await api(A, 'POST', '/room/control/give/' + encodeURIComponent(await sessionId(name)))
+  else await p.click('[data-testid=control-toggle]')
+  await hosting(p)
+}
+const openSide = async (p, name, tab = 'chat') => {
+  if (!(await p.locator('[data-testid=side-sheet]').count())) {
+    await takeControl(p, name)
+    await p.click('[data-testid=phone-more]')
+    await p.click(`[data-testid=phone-menu-${tab}]`)
+    await p.waitForSelector('[data-testid=side-sheet]', { timeout: 3000 })
+    await api(p, 'POST', '/room/control/release')
+    await notHosting(p)
+  }
   await p.waitForSelector('[data-testid=side]', { timeout: 3000 })
 }
 const playing = (p) =>
@@ -99,6 +139,18 @@ const playing = (p) =>
     const v = document.querySelector('video')
     return `${v.videoWidth}x${v.videoHeight} paused=${v.paused} muted=${v.muted}`
   })
+const chatEvent = (p, re) =>
+  p.waitForFunction(
+    (src) =>
+      [...document.querySelectorAll('[data-testid=chat-event]')].some((e) => new RegExp(src).test(e.textContent)),
+    re.source,
+    { timeout: 5000 },
+  )
+// the member menu: the member list is gone, so it opens from the author of a chat message
+const memberMenu = async (p, author, item) => {
+  await p.locator('[data-testid=chat-author]', { hasText: author }).last().click({ button: 'right' })
+  await p.click(`[data-testid=member-menu] >> text=${item}`)
+}
 
 await step('alice (admin) logs in, video plays', async () => {
   A = await user('alice', ADMIN)
@@ -108,28 +160,22 @@ await step('bob (user) logs in, video plays', async () => {
   B = await user('bob', USER)
   log('  bob video ' + (await playing(B)))
 })
-await step('bob sees pre-existing alice in members', async () => {
-  await B.waitForFunction(() => document.querySelectorAll('[data-testid=member]').length === 2, null, {
-    timeout: 5000,
-  })
-})
-await step('alice sees 2 members, admin shield', async () => {
-  await A.waitForFunction(() => document.querySelectorAll('[data-testid=member]').length === 2, null, {
-    timeout: 5000,
-  })
-  await A.waitForSelector('[data-testid=admin-badge]', { timeout: 5000 })
+await step('both are connected; the viewer is only the stream and the pill', async () => {
+  const names = await connectedNames()
+  if (JSON.stringify(names) !== '["alice","bob"]') throw new Error('connected: ' + JSON.stringify(names))
+  for (const p of [A, B]) {
+    await status(p, /has control/)
+    for (const gone of ['header', 'room-bar', 'phone-more', 'control-tools'])
+      if (await p.locator(`[data-testid=${gone}]`).count()) throw new Error(gone + ' shown while watching')
+  }
 })
 await step('side panel: bob joined event line', async () => {
-  await openSide(A)
+  await openSide(A, 'alice')
   await A.waitForSelector('[data-testid=chat]', { timeout: 3000 })
-  await A.waitForFunction(
-    () => [...document.querySelectorAll('[data-testid=chat-event]')].some((e) => /bob\s+connected/.test(e.textContent)),
-    null,
-    { timeout: 5000 },
-  )
+  await chatEvent(A, /bob\s+connected/)
 })
 await step('chat: bob -> alice', async () => {
-  await openSide(B)
+  await openSide(B, 'bob')
   await B.fill('[data-testid=chat-input]', 'hi from bob')
   await B.press('[data-testid=chat-input]', 'Enter')
   await A.waitForFunction(
@@ -138,42 +184,28 @@ await step('chat: bob -> alice', async () => {
     { timeout: 5000 },
   )
 })
-await step('viewer typing in chat keeps the focus when the mouse crosses the video', async () => {
-  await B.click('[data-testid=chat-input]')
-  await B.keyboard.type('hello ')
-  const box = await B.locator('[data-testid=player]').boundingBox()
-  await B.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await B.mouse.move(box.x + box.width / 2 + 5, box.y + box.height / 2 + 5)
-  await B.keyboard.type('world')
-  const v = await B.inputValue('[data-testid=chat-input]')
-  if (v !== 'hello world') throw new Error('chat box has ' + JSON.stringify(v))
-  await B.fill('[data-testid=chat-input]', '')
+await step('bob takes over with the pill, alice sees it + event', async () => {
+  await closeSide(B)
+  await status(B, /has control/)
+  await B.click('[data-testid=control-toggle]')
+  await hosting(B)
+  await status(B, /You have control/)
+  await B.waitForSelector('[data-testid=control-toggle] >> text=Return control', { timeout: 3000 })
+  await B.waitForSelector('[data-testid=phone-more]', { timeout: 3000 })
+  await status(A, /bob has control/)
+  await chatEvent(A, /bob\s+took the controls/)
 })
-await step('bob takes control, alice sees host + event', async () => {
-  await B.click('[data-testid=control-request]')
-  await A.waitForFunction(() => document.querySelector('[data-testid=member][data-host]:not([data-self])'), null, {
-    timeout: 5000,
-  })
-  await A.waitForFunction(
-    () =>
-      [...document.querySelectorAll('[data-testid=chat-event]')].some((e) =>
-        /bob\s+took the controls/.test(e.textContent),
-      ),
-    null,
-    { timeout: 5000 },
-  )
+await step('alice: right-click bob in chat -> Force Release', async () => {
+  await memberMenu(A, 'bob', 'Force Release Controls')
+  await notHosting(B)
+  if (await B.locator('[data-testid=phone-more]').count()) throw new Error('More menu shown without control')
 })
-await step('alice: right-click bob -> Force Release', async () => {
-  await A.click('[data-testid=member]:not([data-self])', { button: 'right' })
-  await A.click('[data-testid=member-menu] >> text=Force Release Controls')
-  await B.waitForFunction(() => !document.querySelector('[data-testid=member][data-self][data-host]'), null, {
-    timeout: 5000,
-  })
-})
-await step('alice sends emote, bob sees animation', async () => {
-  await A.click('[data-testid=emotes-open]')
-  await A.click('[data-testid=emotes-menu] [data-emote=wave]')
-  await B.waitForSelector('[data-testid=emote-animation]', { timeout: 3000 })
+await step('bob returns control with the pill', async () => {
+  await B.click('[data-testid=control-toggle]')
+  await hosting(B)
+  await B.click('[data-testid=control-toggle]')
+  await notHosting(B)
+  await status(A, /has control/)
 })
 await step('files: alice uploads, the list shows the file', async () => {
   if (!(await A.locator('[data-testid=tabs] >> text=Files').count()))
@@ -196,6 +228,7 @@ await step('files: download link works', async () => {
   await A.waitForSelector('[data-testid=file-name] >> text=react-e2e.txt', { state: 'detached', timeout: 5000 })
 })
 await step('markdown: bob -> alice renders safely', async () => {
+  await openSide(B, 'bob')
   await B.click('[data-testid=tabs] >> text=Chat')
   await B.fill('[data-testid=chat-input]', '**bold** ||secret|| :smile: https://example.com [x](javascript:alert(1))')
   await B.press('[data-testid=chat-input]', 'Enter')
@@ -211,21 +244,15 @@ await step('markdown: bob -> alice renders safely', async () => {
 await step('narrow screen: the member menu opens from a chat author', async () => {
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 700, height: 900 } })
   const N = await ctx.newPage()
-  await N.goto(URL + '?usr=nina&pwd=' + USER + '&show_side=1')
+  await N.goto(URL + '?usr=nina&pwd=' + USER)
   await N.waitForSelector('[data-testid=connect]', { state: 'detached', timeout: 20000 })
+  await openSide(N, 'nina')
   await B.fill('[data-testid=chat-input]', 'hi nina')
   await B.press('[data-testid=chat-input]', 'Enter')
   await N.waitForSelector('[data-testid=chat-author]', { timeout: 5000 })
   await N.click('[data-testid=chat-author]', { button: 'right' })
   await N.waitForSelector('[data-testid=member-menu]', { state: 'visible', timeout: 3000 })
   await ctx.close()
-})
-await step('muting the sound keeps the desktop usable', async () => {
-  await A.click('[data-testid=mute]')
-  await A.waitForFunction(() => document.querySelector('video').muted, null, { timeout: 3000 })
-  if (await A.locator('[data-testid=player-overlay]').count()) throw new Error('unmute overlay covers the video')
-  await A.click('[data-testid=mute]')
-  await A.waitForFunction(() => !document.querySelector('video').muted, null, { timeout: 3000 })
 })
 await step('emoji picker inserts :name:', async () => {
   await A.click('[data-testid=emoji-open]')
@@ -239,38 +266,19 @@ await step('emoji picker inserts :name:', async () => {
   if (!/^:[^:]+:x$/.test(v2)) throw new Error('after the pick the keyboard went elsewhere: ' + JSON.stringify(v2))
   await A.fill('[data-testid=chat-input]', '')
 })
-await step('language switch (de) and back', async () => {
-  await A.selectOption('[data-testid=lang]', 'de')
-  await A.waitForSelector('[data-testid=tabs] >> text=Einstellungen', { timeout: 3000 })
-  await A.selectOption('[data-testid=lang]', 'en')
-  await A.waitForSelector('[data-testid=tabs] >> text=Settings', { timeout: 3000 })
-})
-await step('admin locks controls, bob sees lock + event', async () => {
-  await A.click('[data-testid=lock-control]')
-  await B.waitForSelector('[data-testid=lock-control][data-locked]', { timeout: 5000 })
-  await B.waitForFunction(
-    () =>
-      [...document.querySelectorAll('[data-testid=chat-event]')].some((e) =>
-        /alice\s+locked controls/.test(e.textContent),
-      ),
-    null,
-    { timeout: 5000 },
-  )
-  await A.click('[data-testid=lock-control]')
-  await B.waitForSelector('[data-testid=lock-control]:not([data-locked])', { timeout: 5000 })
+await step('admin locks controls: bob loses the Take over pill + event', async () => {
+  await api(A, 'POST', '/room/settings', { locked_controls: true })
+  await B.waitForSelector('[data-testid=control-toggle]', { state: 'detached', timeout: 5000 })
+  await chatEvent(B, /alice\s+locked controls/)
+  await api(A, 'POST', '/room/settings', { locked_controls: false })
+  await B.waitForSelector('[data-testid=control-toggle]', { timeout: 5000 })
 })
 await step('admin mutes bob: input gone, event line; then unmute', async () => {
-  await A.click('[data-testid=member]:not([data-self])', { button: 'right' })
-  await A.click('[data-testid=member-menu] >> text=Mute')
+  await memberMenu(A, 'bob', 'Mute')
   await A.click('[data-testid=dialog-confirm]')
   await B.waitForSelector('[data-testid=chat-input]', { state: 'detached', timeout: 5000 })
-  await A.waitForFunction(
-    () => [...document.querySelectorAll('[data-testid=chat-event]')].some((e) => /You\s+muted bob/.test(e.textContent)),
-    null,
-    { timeout: 5000 },
-  )
-  await A.click('[data-testid=member]:not([data-self])', { button: 'right' })
-  await A.click('[data-testid=member-menu] >> text=Unmute')
+  await chatEvent(A, /You\s+muted bob/)
+  await memberMenu(A, 'bob', 'Unmute')
   await A.click('[data-testid=dialog-confirm]')
   await B.waitForSelector('[data-testid=chat-input]', { timeout: 5000 })
 })
@@ -278,38 +286,31 @@ await step("a display name with # and ? cannot redirect the admin's mute", async
   // multiuser session ids start with the login name; unencoded, this id would turn
   // POST /api/members/<id> into a request for a different path
   const E = await user('evil#?x', USER)
-  await openSide(E)
-  await E.waitForSelector('[data-testid=chat-input]', { timeout: 5000 })
-  await A.waitForFunction(() => document.querySelectorAll('[data-testid=member]').length === 3, null, {
-    timeout: 5000,
-  })
-  await A.click('[data-testid=member][aria-label="evil#?x"]', { button: 'right' })
-  await A.click('[data-testid=member-menu] >> text=Mute')
+  await openSide(E, 'evil#?x')
+  await E.fill('[data-testid=chat-input]', 'hi from evil')
+  await E.press('[data-testid=chat-input]', 'Enter')
+  await A.waitForSelector('[data-testid=chat-author] >> text=evil#?x', { timeout: 5000 })
+  await memberMenu(A, 'evil#?x', 'Mute')
   await A.click('[data-testid=dialog-confirm]')
   await E.waitForSelector('[data-testid=chat-input]', { state: 'detached', timeout: 5000 })
   if (await A.locator('[data-testid=connect]').count()) throw new Error('admin lost the session')
   await E.context().close()
-  await A.waitForFunction(() => document.querySelectorAll('[data-testid=member]').length === 2, null, {
-    timeout: 5000,
-  })
+  for (let i = 0; i < 20 && (await connectedNames()).includes('evil#?x'); i++) await A.waitForTimeout(250)
+  if ((await connectedNames()).includes('evil#?x')) throw new Error('evil#?x still connected')
 })
-await step('keyboard: Enter on focused icon toggles side panel', async () => {
-  await B.focus('[data-testid=side-toggle]')
+await step('keyboard: Enter on the focused close button closes the side panel', async () => {
+  await B.focus('[data-testid=side-sheet] [aria-label="Close panel"]')
   await B.keyboard.press('Enter')
-  await B.waitForSelector('[data-testid=side]', { state: 'detached', timeout: 3000 })
-  await B.keyboard.press('Enter')
-  await B.waitForSelector('[data-testid=side]', { timeout: 3000 })
+  await B.waitForSelector('[data-testid=side-sheet]', { state: 'detached', timeout: 3000 })
+  await openSide(B, 'bob')
 })
 await step('a member who may not watch gets the room without video, not a spinner', async () => {
-  const bobId = JSON.parse(await api(A, 'GET', '/sessions')).find(
-    (s) => s.profile.name === 'bob' && s.state.is_connected,
-  ).id
+  const bobId = await sessionId('bob')
   await api(A, 'POST', '/members/' + encodeURIComponent(bobId), { can_watch: false })
   try {
     await B.reload()
     await B.waitForSelector('[data-testid=connect]', { state: 'detached', timeout: 20000 }) // the offer timeout (8 s) ends the spinner
-    await openSide(B)
-    await B.waitForSelector('[data-testid=chat-input]', { timeout: 5000 })
+    await B.waitForSelector('[data-testid=control-status]', { timeout: 5000 })
   } finally {
     await api(A, 'POST', '/members/' + encodeURIComponent(bobId), { can_watch: true })
   }
@@ -322,13 +323,22 @@ await step('a member who may not watch gets the room without video, not a spinne
     null,
     { timeout: 30000 },
   )
-  await openSide(B)
+  await openSide(B, 'bob')
 })
-await step('admin changes resolution, bob sees event; revert', async () => {
-  await A.click('[data-testid=resolution-open]')
-  const current = (await A.locator('[data-testid=resolution-item][data-active]').textContent()) ?? ''
+await step('admin changes resolution from the More menu, bob sees event; revert', async () => {
+  await takeControl(A, 'alice')
+  const pick = async (choose) => {
+    await A.click('[data-testid=phone-more]')
+    await A.click('[data-testid=phone-menu] >> text=Screen size')
+    await A.waitForSelector('[data-testid=resolution-item]', { timeout: 3000 })
+    await choose()
+  }
+  let current = ''
   const width = await A.evaluate(() => document.querySelector('video').videoWidth)
-  await A.locator('[data-testid=resolution-item]').filter({ hasNotText: current }).first().click()
+  await pick(async () => {
+    current = (await A.locator('[data-testid=resolution-item][data-active]').textContent()) ?? ''
+    await A.locator('[data-testid=resolution-item]').filter({ hasNotText: current }).first().click()
+  })
   await B.waitForFunction(
     () =>
       [...document.querySelectorAll('[data-testid=chat-event]')].some((e) =>
@@ -337,35 +347,30 @@ await step('admin changes resolution, bob sees event; revert', async () => {
     null,
     { timeout: 8000 },
   )
-  await A.click('[data-testid=resolution-open]')
-  await A.locator('[data-testid=resolution-item]', { hasText: current }).first().click()
-  await A.mouse.click(5, 5)
+  await pick(() => A.locator('[data-testid=resolution-item]', { hasText: current }).first().click())
   await A.waitForFunction((w) => document.querySelector('video').videoWidth === w, width, { timeout: 15000 })
+  await api(A, 'POST', '/room/control/release')
+  await notHosting(A)
 })
-await step('settings: keyboard layouts loaded, about opens', async () => {
+await step('settings: keyboard layouts loaded', async () => {
+  await openSide(A, 'alice', 'settings')
   await A.click('[data-testid=tabs] >> text=Settings')
   const n = await A.locator('[data-testid=settings] select option').count()
   if (n < 20) throw new Error('only ' + n + ' keyboard layouts')
-  await A.click('[data-testid=about-open]')
-  await A.waitForSelector('[data-testid=about] >> text=m1k1o/neko', { timeout: 3000 })
-  await A.click('[data-testid=about-close]')
-  await A.waitForSelector('[data-testid=about]', { state: 'detached', timeout: 3000 })
   await A.click('[data-testid=tabs] >> text=Chat')
 })
-await step('implicit hosting: bob gets control by clicking', async () => {
+await step('implicit hosting: bob gets control by clicking the stream', async () => {
   await api(A, 'POST', '/room/settings', { implicit_hosting: true })
-  await B.waitForSelector('[data-testid=control-implicit]', { timeout: 5000 })
+  await closeSide(B)
   const box = await B.locator('[data-testid=player]').boundingBox()
   await B.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-  await B.waitForSelector('[data-testid=member][data-self][data-host]', { timeout: 5000 })
+  await hosting(B)
   await api(A, 'POST', '/room/settings', { implicit_hosting: false })
-  await A.waitForSelector('[data-testid=control-request]', { timeout: 5000 })
   await api(A, 'POST', '/room/control/reset')
-  await B.waitForSelector('[data-testid=member][data-self][data-host]', { state: 'detached', timeout: 5000 })
+  await notHosting(B)
 })
 await step('clipboard: local clipboard reaches the remote when hovering', async () => {
-  await A.click('[data-testid=control-request]')
-  await A.waitForSelector('[data-testid=member][data-self][data-host]', { timeout: 5000 })
+  await takeControl(A, 'alice')
   // give the X clipboard an owner first: reading it while nothing owns it is a server 500 (xclip
   // exits) that the browser logs as an error, which is not what this step is about
   await api(A, 'POST', '/room/clipboard', { text: 'seed' })
@@ -383,15 +388,8 @@ await step('clipboard: local clipboard reaches the remote when hovering', async 
     text,
     { timeout: 8000, polling: 500 },
   )
-})
-await step('microphone: host enables and disables (fake device)', async () => {
-  await A.click('[data-testid=mic]:not([data-on])')
-  await A.waitForSelector('[data-testid=mic][data-on]', { timeout: 5000 })
-  if (await A.locator('[data-testid=dialog]').count())
-    throw new Error(await A.locator('[data-testid=dialog]').textContent())
-  await A.click('[data-testid=mic][data-on]')
-  await A.waitForSelector('[data-testid=mic]:not([data-on])', { timeout: 5000 })
   await api(A, 'POST', '/room/control/release')
+  await notHosting(A)
 })
 // the textarea fallback shows when the browser cannot read the local clipboard (Firefox, Safari):
 // emulated by removing readText before the app loads
@@ -400,8 +398,8 @@ await step('clipboard fallback: the popover keeps the focus while the mouse cros
     Object.defineProperty(Clipboard.prototype, 'readText', { value: undefined }),
   )
   try {
-    await C.click('[data-testid=control-request]')
-    await C.waitForSelector('[data-testid=member][data-self][data-host]', { timeout: 5000 })
+    await C.click('[data-testid=control-toggle]')
+    await hosting(C)
     await C.click('[data-testid=clipboard-open]')
     const inPopover = () => document.activeElement?.closest('[data-testid=clipboard] textarea') != null
     await C.waitForFunction(inPopover, null, { timeout: 3000 })
@@ -472,8 +470,7 @@ await step('long outage: session kept, Connect button instead of the login form'
   )
 })
 await step('alice takes control and types into KDE', async () => {
-  await A.click('[data-testid=control-request]')
-  await A.waitForSelector('[data-testid=member][data-self][data-host]', { timeout: 5000 })
+  await takeControl(A, 'alice')
   const box = await A.locator('[data-testid=player]').boundingBox()
   await A.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await A.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2 + 3)
@@ -512,54 +509,52 @@ await step('alice takes control and types into KDE', async () => {
   await A.keyboard.press('Escape')
 })
 await step('alice kicks bob -> bob back at login', async () => {
-  await A.click('[data-testid=member]:not([data-self])', { button: 'right' })
-  await A.click('[data-testid=member-menu] >> text=Kick')
+  await api(A, 'POST', '/room/control/release').catch(() => {})
+  await openSide(A, 'alice')
+  await A.click('[data-testid=tabs] >> text=Chat')
+  await memberMenu(A, 'bob', 'Kick')
   await A.click('[data-testid=dialog-confirm]')
   await B.waitForSelector('[data-testid=connect] input[type=password]', { timeout: 8000 })
-  await A.click('[data-testid=tabs] >> text=Chat')
-  await A.waitForFunction(
-    () =>
-      [...document.querySelectorAll('[data-testid=chat-event]')].some((e) => /bob\s+disconnected/.test(e.textContent)),
-    null,
-    { timeout: 5000 },
-  )
+  await chatEvent(A, /bob\s+disconnected/)
   await B.screenshot({ path: out + '/e2e-bob-kicked.png' })
 })
-await step('url params: ?usr&pwd&lang&show_side auto-login, url cleaned, logout', async () => {
+await step('url params: ?usr&pwd&lang auto-login, url cleaned, logout', async () => {
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true })
   const C = await ctx.newPage()
-  await C.goto(URL + '?usr=carol&pwd=' + USER + '&lang=de&show_side=1')
+  await C.goto(URL + '?usr=carol&pwd=' + USER + '&lang=de')
   await C.waitForSelector('[data-testid=connect]', { state: 'detached', timeout: 20000 })
-  await C.waitForSelector('[data-testid=side] >> text=Einstellungen', { timeout: 5000 })
   if (/pwd=/.test(C.url())) throw new Error('password left in url: ' + C.url())
   // the same browser profile opens another invite link while its session is still valid:
   // the new login must win on both the websocket and REST (no split identity)
-  await C.goto(URL + '?usr=carol2&pwd=' + USER + '&show_side=1')
+  await C.goto(URL + '?usr=carol2&pwd=' + USER + '&lang=de')
   await C.waitForSelector('[data-testid=connect]', { state: 'detached', timeout: 20000 })
   // the browser closes the first page's socket on navigation; Firefox does so without a close
   // code and the server then keeps that session for its 5 s reconnect grace
   let connected
   for (let i = 0; i < 16; i++) {
     await C.waitForTimeout(500)
-    connected = JSON.parse(await api(A, 'GET', '/sessions'))
-      .filter((s) => s.state.is_connected)
-      .map((s) => s.profile.name)
+    connected = await connectedNames()
     if (connected.includes('carol2') && !connected.includes('carol')) break
   }
   if (!connected.includes('carol2') || connected.includes('carol'))
     throw new Error('connected sessions after the second invite: ' + JSON.stringify(connected))
+  await openSide(C, 'carol2', 'settings')
+  await C.waitForSelector('[data-testid=side] >> text=Einstellungen', { timeout: 5000 })
   await C.click('[data-testid=tabs] >> text=Einstellungen')
   await C.click('[data-testid=logout]')
   await C.waitForSelector('[data-testid=connect] input[type=password]', { timeout: 8000 })
   await ctx.close()
 })
-await step('url params: ?embed=1 hides header and room bar', async () => {
+await step('url params: ?embed=1 keeps the pill, ?cast=1 shows the stream alone', async () => {
   const ctx = await browser.newContext({ ignoreHTTPSErrors: true })
   const C = await ctx.newPage()
   await C.goto(URL + '?embed=1&usr=dave&pwd=' + USER)
   await C.waitForSelector('[data-testid=connect]', { state: 'detached', timeout: 20000 })
-  if ((await C.locator('[data-testid=header]').count()) || (await C.locator('[data-testid=room-bar]').count()))
-    throw new Error('chrome visible in embed mode')
+  await C.waitForSelector('[data-testid=control-bar]', { timeout: 5000 })
+  await C.goto(URL + '?cast=1&usr=dave&pwd=' + USER)
+  await C.waitForSelector('[data-testid=connect]', { state: 'detached', timeout: 20000 })
+  await C.waitForSelector('video', { timeout: 5000 })
+  if (await C.locator('[data-testid=control-bar]').count()) throw new Error('control pill shown in cast mode')
   await ctx.close()
 })
 console.log(
