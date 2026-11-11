@@ -16,11 +16,13 @@ import { EachHook } from '@/components/EachHook'
 import type { PluginTab } from '@/plugins/types'
 
 // The one control under the stream, as in an agent's browser: who has control, and a pill to take
-// it over or give it back. Everything else (tools, the More menu) appears only while you have control.
+// it over or give it back. While you have control, the tools you need then (Keyboard, Copy, Paste,
+// the More menu) sit inside that same light pill, between the status and Return control.
 
+// a tool inside the light pill
 export const tool =
-  'size-10 shrink-0 rounded-full text-white transition-colors hover:bg-white/10 active:bg-white/20 disabled:cursor-default disabled:opacity-35'
-export const toolGroup = 'flex items-center rounded-full border border-white/10 bg-white/[0.06] p-0.5'
+  'size-9 shrink-0 rounded-full text-neutral-700 transition-colors hover:bg-black/5 active:bg-black/10 disabled:cursor-default disabled:opacity-35 aria-pressed:bg-black/10 aria-pressed:text-neutral-900'
+export const toolGroup = 'flex items-center'
 // a More menu entry
 export const menuItem =
   'flex min-h-10 cursor-pointer items-center gap-3 rounded-xl px-3 text-[15px] outline-hidden data-disabled:cursor-default data-disabled:opacity-35 data-highlighted:bg-white/10'
@@ -101,7 +103,7 @@ export function ControlBar({
           href={back}
           aria-label={t('back_link')}
           title={t('back_link')}
-          className={cn(tool, 'pointer-events-auto flex items-center justify-center text-white/70')}
+          className="pointer-events-auto flex size-9 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10"
           data-testid="bar-back"
         >
           <ArrowLeftIcon className="size-5" />
@@ -109,21 +111,80 @@ export function ControlBar({
       )}
       <div
         className={cn(
-          'pointer-events-auto flex items-center gap-3 rounded-full py-1 pr-1 pl-4 transition-colors duration-150',
-          hosting ? 'bg-neutral-100 text-neutral-900' : 'text-white',
+          'pointer-events-auto flex max-w-full items-center rounded-full py-1 pr-1 transition-colors duration-150',
+          hosting ? 'bg-neutral-100 pl-1.5 text-neutral-900 min-[480px]:pl-4' : 'pl-4 text-white',
         )}
       >
-        <span className="text-[15px] whitespace-nowrap" role="status" data-testid="control-status">
+        <span
+          // on a phone the light pill and Return control already say it; the tools need the room
+          className={cn('text-[15px] whitespace-nowrap', hosting && 'sr-only min-[480px]:not-sr-only')}
+          role="status"
+          data-testid="control-status"
+        >
           {status}
         </span>
+        {hosting && (
+          <div className="flex items-center min-[480px]:ml-2" data-testid="control-tools">
+            {tools}
+            <Menu.Root open={open} onOpenChange={setOpen} modal={false}>
+              <Menu.Trigger asChild>
+                <IconButton
+                  label={t('phone.more')}
+                  className={cn(tool, open && 'bg-black/10')}
+                  data-testid="phone-more"
+                >
+                  <DotsThreeIcon className="size-5" weight="bold" />
+                </IconButton>
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Content
+                  side="top"
+                  align="end"
+                  sideOffset={10}
+                  collisionPadding={8}
+                  className={menuContent}
+                  data-testid="phone-menu"
+                >
+                  {menu}
+                  <EachHook items={tabs} use={(tab) => tab.useVisible ?? always}>
+                    {(visible) =>
+                      tabs
+                        .filter((_, i) => visible[i])
+                        .map(({ id, icon: Icon, label }) => (
+                          <Menu.Item
+                            key={id}
+                            className={menuItem}
+                            data-testid={`phone-menu-${id}`}
+                            onSelect={() => {
+                              app.setState({ tab: id, sheet: true })
+                              remember('tab', id)
+                            }}
+                          >
+                            <Icon className="size-5" />
+                            {t(label)}
+                          </Menu.Item>
+                        ))
+                    }
+                  </EachHook>
+                  <Menu.Item className={menuItem} data-testid="phone-menu-viewer" onSelect={() => location.reload()}>
+                    <ArrowsCounterClockwiseIcon className="size-5" />
+                    {t('phone.reload_viewer')}
+                  </Menu.Item>
+                </Menu.Content>
+              </Menu.Portal>
+            </Menu.Root>
+            {/* where the tools end and the control begins */}
+            <span className="mx-1.5 h-5 w-px bg-neutral-300" aria-hidden />
+          </div>
+        )}
         {canPress && (
           <button
             type="button"
             className={cn(
-              'min-h-9 cursor-pointer rounded-full px-4 text-[15px] font-semibold whitespace-nowrap transition-[background-color,transform] duration-100 active:scale-95 disabled:cursor-default',
+              'min-h-9 shrink-0 cursor-pointer rounded-full px-4 text-[15px] font-semibold whitespace-nowrap transition-[background-color,transform] duration-100 active:scale-95 disabled:cursor-default',
               hosting
                 ? 'bg-neutral-300 text-neutral-900 hover:bg-neutral-400/80'
-                : 'bg-neutral-100 text-black hover:bg-white',
+                : 'ml-3 bg-neutral-100 text-black hover:bg-white',
               pending && 'opacity-60',
             )}
             aria-busy={!!pending || undefined}
@@ -136,58 +197,6 @@ export function ControlBar({
           </button>
         )}
       </div>
-      {hosting && (
-        <div className="pointer-events-auto flex items-center gap-2" data-testid="control-tools">
-          {tools}
-          <Menu.Root open={open} onOpenChange={setOpen} modal={false}>
-            <Menu.Trigger asChild>
-              <IconButton
-                label={t('phone.more')}
-                className={cn(tool, 'border border-white/10 bg-white/[0.06]', open && 'bg-white/15')}
-                data-testid="phone-more"
-              >
-                <DotsThreeIcon className="size-5" weight="bold" />
-              </IconButton>
-            </Menu.Trigger>
-            <Menu.Portal>
-              <Menu.Content
-                side="top"
-                align="end"
-                sideOffset={8}
-                collisionPadding={8}
-                className={menuContent}
-                data-testid="phone-menu"
-              >
-                {menu}
-                <EachHook items={tabs} use={(tab) => tab.useVisible ?? always}>
-                  {(visible) =>
-                    tabs
-                      .filter((_, i) => visible[i])
-                      .map(({ id, icon: Icon, label }) => (
-                        <Menu.Item
-                          key={id}
-                          className={menuItem}
-                          data-testid={`phone-menu-${id}`}
-                          onSelect={() => {
-                            app.setState({ tab: id, sheet: true })
-                            remember('tab', id)
-                          }}
-                        >
-                          <Icon className="size-5" />
-                          {t(label)}
-                        </Menu.Item>
-                      ))
-                  }
-                </EachHook>
-                <Menu.Item className={menuItem} data-testid="phone-menu-viewer" onSelect={() => location.reload()}>
-                  <ArrowsCounterClockwiseIcon className="size-5" />
-                  {t('phone.reload_viewer')}
-                </Menu.Item>
-              </Menu.Content>
-            </Menu.Portal>
-          </Menu.Root>
-        </div>
-      )}
     </div>
   )
 }

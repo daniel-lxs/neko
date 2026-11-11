@@ -176,7 +176,7 @@ export function PhoneStage({ hideControls, tabs }: { hideControls: boolean; tabs
                 <div className={toolGroup} data-testid="phone-tools">
                   <IconButton
                     label={t('phone.keyboard')}
-                    className={cn(tool, keyboard && 'bg-white/20')}
+                    className={tool}
                     disabled={!active}
                     aria-pressed={keyboard}
                     onMouseDown={(e) => e.preventDefault()}
