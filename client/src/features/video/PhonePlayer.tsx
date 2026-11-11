@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { selectControlling } from '@m1k1o/neko'
 import { useNeko } from '@/state/provider'
 import { Player } from './Player'
 
@@ -9,10 +10,14 @@ const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y)
 const midpoint = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
 // A finger held this long without moving presses the remote mouse button; moving then drags.
 const holdMs = 450
+// A tap that asked for control lands if control arrives within this long.
+const replayMs = 2000
 
 // Zoom the stream image locally. The overlay beneath the gesture surface still owns
 // keyboard input, but never receives the first finger of a possible pinch or pan.
 // Press and hold, then move, drags on the remote desktop (sliders, selections, maps).
+// `onTap`: whether taps may reach the remote at all. Without control, a tap asks for it and is
+// played once control arrives, instead of being spent on the request.
 export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
   const { client } = useNeko()
   const frame = useRef<HTMLDivElement>(null)
@@ -35,6 +40,9 @@ export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
   const [ripple, setRipple] = useState<(Point & { id: number }) | null>(null)
   const rippleTimer = useRef(0)
   const rippleId = useRef(0)
+  // the tap that asked for control, played when control arrives
+  const waiting = useRef<(Point & { at: number }) | null>(null)
+  const replay = useRef<(at: Point) => void>(() => {})
 
   const constrain = (next: View): View => {
     const box = frame.current!.getBoundingClientRect()
@@ -101,8 +109,14 @@ export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
         setView(fitted)
       },
     )
+    const unhost = client.store.subscribe(selectControlling, (controlling) => {
+      const tap = waiting.current
+      waiting.current = null
+      if (controlling && tap && performance.now() - tap.at < replayMs) replay.current(tap)
+    })
     window.addEventListener('blur', cancel)
     return () => {
+      unhost()
       surface.removeEventListener('touchstart', keepKeyboard)
       observer.disconnect()
       unwatch()
@@ -166,10 +180,11 @@ export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
   const hold = (id: number) => {
     const candidate = tap.current
     if (!candidate || candidate.id !== id || candidate.moved || points.current.size !== 1) return
-    // Same rules as a tap: a hold while the controls are hidden only reveals them, and one
-    // without control asks for it.
+    // Without control, a hold asks for it; the drag needs a fresh press once it arrives.
     tap.current = null
-    if (!candidate.accept() || !canSend()) return
+    if (!candidate.accept()) return
+    if (canRequest()) client.request()
+    if (!canSend()) return
     const p = remote(candidate.start)
     if (!p) return
     drag.current = { id }
@@ -259,25 +274,42 @@ export function PhonePlayer({ onTap }: { onTap: () => boolean }) {
     const scrolling = moved && candidate.fitted && current.current.scale === 1
     if (moved && !scrolling) return
     if (!moved && performance.now() - candidate.at > 600) return
-    // A hidden-state tap only reveals controls; deliberate swipes can scroll while
-    // hidden. No remote input is sent before the entire single-finger gesture ends.
-    if ((!scrolling && !candidate.accept()) || !canSend()) return
-    const target = remote(scrolling ? candidate.start : point(event))
-    if (!target) return
-    client.input.move(target.x, target.y)
-    if (scrolling) {
-      const steps = (delta: number) =>
-        Math.abs(delta) <= 8 ? 0 : Math.sign(delta) * Math.min(12, Math.max(1, Math.round(Math.abs(delta) / 53)))
-      client.input.scroll(steps(event.clientX - candidate.start.x), steps(event.clientY - candidate.start.y), false)
+    // No remote input is sent before the entire single-finger gesture ends.
+    if (!scrolling && !candidate.accept()) return
+    if (!scrolling && canRequest()) {
+      // one round trip: the tap that takes control is also the first click
+      waiting.current = { ...point(event), at: performance.now() }
+      client.request()
       return
     }
+    if (!canSend()) return
+    if (!scrolling) return click(point(event))
+    const target = remote(candidate.start)
+    if (!target) return
+    client.input.move(target.x, target.y)
+    const steps = (delta: number) =>
+      Math.abs(delta) <= 8 ? 0 : Math.sign(delta) * Math.min(12, Math.max(1, Math.round(Math.abs(delta) / 53)))
+    client.input.scroll(steps(event.clientX - candidate.start.x), steps(event.clientY - candidate.start.y), false)
+  }
+  const canRequest = () =>
+    client.connected &&
+    !client.privateModeEnabled &&
+    !client.controlling &&
+    !!client.session?.profile.can_host &&
+    client.state.video.playable
+  function click(at: Point) {
+    if (!canSend()) return
+    const target = remote(at)
+    if (!target) return
+    client.input.move(target.x, target.y)
     client.input.button(1, true)
     client.input.button(1, false)
     const box = frame.current!.getBoundingClientRect()
-    setRipple({ id: ++rippleId.current, x: event.clientX - box.left, y: event.clientY - box.top })
+    setRipple({ id: ++rippleId.current, x: at.x - box.left, y: at.y - box.top })
     clearTimeout(rippleTimer.current)
     rippleTimer.current = window.setTimeout(() => setRipple(null), 500)
   }
+  replay.current = click
 
   return (
     <div ref={frame} className="absolute inset-0 overflow-hidden" data-testid="phone-image" data-scale={view.scale}>
