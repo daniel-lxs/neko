@@ -77,10 +77,11 @@ test('the event wiring is per instance and once: a server event of one becomes o
   a.client.events.emit('room.control.host', true, 'bob', 'bob')
   assert.deepEqual(la.at(-1), ['bob', 'BOB', 'notifications.controls_taken'])
   assert.deepEqual([la.length, lb.length], [2, 1])
-  // b's own controls: a toast for b's viewer, nothing on a
+  // b's own controls: a line on b, nothing on a, and no toast (the control pill says it)
+  const toasts = sonner.info.mock.calls.length
   b.client.events.emit('room.control.host', true, 'other', 'other')
   assert.deepEqual(lb.at(-1), ['other', 'you', 'notifications.controls_taken'])
-  assert.equal(sonner.info.mock.calls.at(-1)?.[0], 'notifications.controls_taken')
+  assert.equal(sonner.info.mock.calls.length, toasts)
   assert.deepEqual([la.length, lb.length], [2, 2])
   // the member list is per instance too: a's session events do not reach b's wiring
   a.client.store.setState({ sessions: { ...a.client.state.sessions, carl: session('carl', 'Carl') } })

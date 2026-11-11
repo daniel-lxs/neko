@@ -5,14 +5,11 @@ import { useTranslation } from 'react-i18next'
 import { useNeko } from '@/state/provider'
 import { useSlot } from '@/plugins'
 import { WebRTCTransport } from '@m1k1o/neko'
-import { cn } from '@/lib/utils'
 import { usePhoneLayout } from '@/lib/usePhoneLayout'
 import logo from '@/assets/images/logo.svg'
 import { Dialog } from '@/components/Dialog'
 import { Toaster } from '@/components/ui/sonner'
-import { Header } from '@/layout/Header'
-import { Side, SideSheet, settingsTab } from '@/layout/Side'
-import { RoomBar } from '@/layout/RoomBar'
+import { SideSheet, settingsTab } from '@/layout/Side'
 import { Stage } from '@/features/video/Stage'
 import { MemberMenu } from '@/features/members/MemberMenu'
 import { Connect } from '@/features/connect/Connect'
@@ -27,9 +24,9 @@ export function App() {
   const { client, app } = useNeko()
   const { phone, viewport } = usePhoneLayout()
   const connected = useStore(client.store, (s) => s.connection.status === 'connected')
-  const { side, sheet, about } = useStore(
+  const { sheet, about } = useStore(
     app,
-    useShallow((s) => ({ side: s.side, sheet: s.sheet, about: s.about })),
+    useShallow((s) => ({ sheet: s.sheet, about: s.about })),
   )
   const memberMenu = useSlot('member.menu')
   const tabs = [...useSlot('side.tab'), settingsTab]
@@ -52,43 +49,24 @@ export function App() {
     )
   }
 
-  const expanded = !phone && !videoOnly && side
+  // Only the stream and the control pill under it; the side panel (files, chat, settings) opens
+  // from the pill's More menu as a sheet.
   return (
     // every icon filled, as in the v2 client (phosphor defaults to the outline `regular` weight)
     <IconContext.Provider value={{ weight: 'fill' }}>
       <div
         id="neko"
-        className={
-          phone
-            ? 'fixed inset-x-0 flex max-w-full'
-            : 'tablet:relative tablet:max-h-none tablet:flex-col absolute inset-0 flex max-h-[100vh] max-w-[100vw]'
-        }
+        className={phone ? 'fixed inset-x-0 flex max-w-full' : 'absolute inset-0 flex max-h-[100vh] max-w-[100vw]'}
         style={phone ? { height: viewport.height, top: viewport.top } : undefined}
       >
-        <main
-          className={
-            phone
-              ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'
-              : cn(
-                  'flex min-w-[360px] max-w-full grow flex-col overflow-auto',
-                  expanded ? 'tablet:portrait:h-[40vh] tablet:landscape:h-screen' : 'tablet:h-screen',
-                )
-          }
-        >
-          {!phone && !videoOnly && (
-            <div className="flex h-menu shrink-0 bg-background-tertiary" data-testid="header">
-              <Header />
-            </div>
-          )}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {/* .video-container: index.html sizes it before the app renders (iOS) */}
-          <div className={phone ? 'relative min-h-0 flex-1' : 'video-container flex max-w-full grow bg-black/40'}>
-            <Stage phone={phone} hideControls={cast} extraControls={videoOnly} tabs={tabs} />
+          <div className={phone ? 'relative min-h-0 flex-1' : 'video-container relative flex min-h-0 max-w-full grow'}>
+            <Stage phone={phone} hideControls={cast} tabs={tabs} />
           </div>
-          {!phone && !videoOnly && <RoomBar />}
         </main>
-        {!phone && !videoOnly && <MemberMenu items={memberMenu} />}
-        {expanded && <Side />}
-        {phone && !videoOnly && sheet && <SideSheet />}
+        {!videoOnly && <MemberMenu items={memberMenu} />}
+        {!videoOnly && sheet && <SideSheet drawer={!phone} />}
         {!connected && <Connect />}
         {!videoOnly && <Toaster />}
         {about && <About />}

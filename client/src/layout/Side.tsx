@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { SlidersHorizontalIcon, XIcon } from '@phosphor-icons/react'
 import { useApp } from '@/state/provider'
 import { remember } from '@/state/storage'
+import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Settings } from '@/features/settings/Settings'
 import { useSlot } from '@/plugins'
@@ -37,16 +38,20 @@ export function Side({ sheet = false }: { sheet?: boolean }) {
 
 // the touch viewer's way to the same panel (files, chat, settings): over the whole screen, opened
 // on a tab from its More menu
-export function SideSheet() {
+// `drawer`: a mouse-driven viewer gets it as a panel at the right edge instead
+export function SideSheet({ drawer = false }: { drawer?: boolean }) {
   const { t } = useTranslation()
   const app = useApp()
   const close = () => app.setState({ sheet: false })
   return (
     <Dialog open onOpenChange={(open) => !open && close()}>
       <DialogPortal>
-        <DialogOverlay className="bg-black" />
+        <DialogOverlay className={drawer ? 'bg-black/40' : 'bg-black'} />
         <DialogContent
-          className="inset-0 flex translate-x-0 translate-y-0 flex-col bg-background-primary pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
+          className={cn(
+            'flex translate-x-0 translate-y-0 flex-col bg-background-primary pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]',
+            drawer ? 'inset-y-0 right-0 left-auto w-side max-w-full shadow-2xl' : 'inset-0',
+          )}
           aria-describedby={undefined}
           data-testid="side-sheet"
         >

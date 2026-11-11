@@ -48,20 +48,17 @@ export function wireEvents(neko: NekoApp) {
     delete known[id]
   })
 
+  // no toasts here: the control pill under the stream already says who has control
   ev.on('room.control.host', (hasHost, hostID, by) => {
-    const me = client.state.session_id
     if (hasHost && hostID) {
       if (by && by !== hostID) event(neko, by, t('notifications.controls_given', { name: name(client, hostID) }))
       else if (lastHost && lastHost !== hostID)
         event(neko, hostID, t('notifications.controls_taken_steal', { name: name(client, lastHost) }))
       else event(neko, hostID, t('notifications.controls_taken', { name: '' }))
-      if (hostID === me) toast(t('notifications.controls_taken', { name: t('you') }))
-      else if (lastHost === me) toast(t('notifications.controls_released', { name: t('you') }))
     } else if (lastHost) {
       if (by && by !== lastHost)
         event(neko, by, t('notifications.controls_released_steal', { name: name(client, lastHost) }))
       else event(neko, lastHost, t('notifications.controls_released', { name: '' }))
-      if (lastHost === me) toast(t('notifications.controls_released', { name: t('you') }))
     }
     lastHost = hasHost ? (hostID ?? null) : null
   })

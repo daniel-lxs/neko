@@ -120,5 +120,17 @@
     "controls_requesting": "{{name}} is requesting the controls",
     "resolution": "changed the resolution to {{width}}x{{height}}@{{rate}}",
     "kicked": "kicked {{name}}"
+  },
+  "bar": {
+    "agent": "The agent",
+    "has": "{{name}} has control",
+    "you": "You have control",
+    "paused": "Your control is paused",
+    "take": "Take over",
+    "return": "Return control",
+    "resume": "Resume",
+    "fullscreen": "Fullscreen",
+    "pip": "Picture in picture",
+    "resolution": "Screen size"
   }
 }
